@@ -131,13 +131,19 @@ def write_list_to_csv(mylist, destination):
             writer.writerow(item)
 
 
-def build_canvas_url(api_subdirectories, page_num):
+def build_canvas_url(api_subdirectories, params):
+    assert isinstance(api_subdirectories, list)
+    assert isinstance(params, dict)
+
     url = "https://canvas.northwestern.edu/api/v1"
 
     for subdir in api_subdirectories:
         url += "/" + str(subdir)
 
-    url += "?page=" + str(page_num)
+    if len(params) > 0:
+        url += "?"
+        params_list = [str(key) + "=" + str(params[key]) for key in params]
+        url += "&".join(params_list)
 
     return url
 

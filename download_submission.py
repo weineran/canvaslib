@@ -74,7 +74,7 @@ if __name__ == "__main__":
     user_id = options.user_id
     netid, user_id = get_netid_and_user_id(netid, user_id, roster_file)
 
-    url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], page_num=None)
+    url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], params={})
     page = open_canvas_page(url, token)
     response = json.loads(page.read())
 

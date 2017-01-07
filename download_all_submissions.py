@@ -48,7 +48,8 @@ def get_or_make_directory(parent_directory, subdirectory):
 
 def build_submissions_url(course_id, assignment_id, page_num):
     api_subdirectories = ["courses", course_id, "assignments", assignment_id, "submissions"]
-    url = build_canvas_url(api_subdirectories, page_num)
+    params = {"page_num": page_num}
+    url = build_canvas_url(api_subdirectories, params)
 
     return url
 

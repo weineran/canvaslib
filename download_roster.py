@@ -15,7 +15,8 @@ parser.add_option("-t", "--token-json-file",
 
 def build_users_url(course_id, page_num):
     api_subdirectories = ["courses", course_id, "users"]
-    url = build_canvas_url(api_subdirectories, page_num)
+    params = {"page_num": page_num, "include[]": "test_student"}
+    url = build_canvas_url(api_subdirectories, params)
 
     return url
 
