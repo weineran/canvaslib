@@ -7,7 +7,9 @@ from utils import get_assignment_name_and_id, get_netid_and_user_id, build_canva
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
-                      description="Download a single submission.")
+                      description="Download a single submission.  Not all arguments are required.                "
+                                  "For example, try:                                                             "
+                                  "python " + __file__ + " -c <course_id> -a <assignment_name> -u <user_id>")
 parser.add_option("-c", "--course-id",
                   dest="course_id", default=None, type=int,
                   help="The Canvas course_id.  e.g. 43589")
@@ -39,9 +41,12 @@ parser.add_option("-t", "--token-json-file",
                   help="The path to a .json file containing the Canvas authorization token.")
 
 
-def get_filename(assignment_name):
+def get_filename(assignment_name, netid):
     assert isinstance(assignment_name, str)
-    return "xv6_" + assignment_name.replace(" ", "_") + ".tar.gz"
+    if not isinstance(netid, str):
+        netid = ""
+
+    return "xv6_" + assignment_name.replace(" ", "_") + "_" + netid + ".tar.gz"
 
 
 if __name__ == "__main__":
@@ -73,13 +78,11 @@ if __name__ == "__main__":
     page = open_canvas_page(url, token)
     response = json.loads(page.read())
 
-    print("")
     if "attachments" not in response:
         print("No attachments submitted for netid: " + netid + " user_id: " + str(user_id) + ".  Exiting.")
         sys.exit(1)
 
     attachments = response["attachments"]
-    print(attachments)
 
     if len(attachments) != 1:
         print("Expected 1 attachment, got: " + str(len(attachments)) + "  Exiting.")
@@ -91,7 +94,7 @@ if __name__ == "__main__":
     if not os.path.isdir(download_directory):
         os.mkdir(download_directory, 0755)
 
-    filename = get_filename(assignment_name)
+    filename = get_filename(assignment_name, netid)
     download_path = os.path.join(download_directory, filename)
 
     request = urllib2.Request(file_url)

@@ -6,7 +6,9 @@ from utils import get_token, download_all_objects_to_list, get_assignment_name_a
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
-                      description="Download all students' submissions for a given assignment.")
+                      description="Download all students' submissions for a given assignment.  Not all arguments are "
+                                  "required.  For example, try:                                                  "
+                                  "$ python " + __file__ + " -c <course_id> -a <assignment_name>")
 parser.add_option("-c", "--course-id",
                   dest="course_id", default=None, type=int,
                   help="The Canvas course_id.  e.g. 43589")
@@ -94,7 +96,6 @@ if __name__ == "__main__":
         netid_directory = get_or_make_directory(parent_directory, netid)
         assignment_directory = os.path.join(netid_directory, assignment_name)
 
-        print("downloading submission for netid: " + netid)
         args = ["python", "download_submission.py",
                   "-c", str(course_id),
                   "-a", assignment_name,
@@ -106,13 +107,13 @@ if __name__ == "__main__":
                   "-d", assignment_directory,
                   "-t", token_json_file]
         args_as_string = " ".join(args)
-        print("calling " + args_as_string)
+        #print("calling " + args_as_string)
         p = subprocess.Popen(args)
         plist[netid] = p
 
     for netid in plist:
         p = plist[netid]
         p.wait()
-        print(netid + " " + str(p.returncode))
+        #print(netid + " " + str(p.returncode))
 
 
