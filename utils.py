@@ -108,7 +108,9 @@ def download_all_objects_to_list(url, token, mylist):
 
     while should_continue == True:
         page = open_canvas_page(url, token)
-        response = page.read()
+        response = page.read().decode("unicode-escape").encode("ascii", "ignore")
+        #response = response.decode()
+        #print(response)
         response = json.loads(response)
 
         for user in response:
