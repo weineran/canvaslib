@@ -1,2 +1,6 @@
 *.json
 .idea/
+*.pyc
+resources/
+.DS_Store
+

@@ -1,12 +1,8 @@
 from optparse import OptionParser
-import urllib2
-import json
 import os
-import csv
-import sys
 import subprocess
-#from autograde import get_file_local_or_full, get_dir_local_or_full
-from download_submission import get_assignment_name_and_id
+from utils import get_token, download_all_objects_to_list, get_assignment_name_and_id, get_netid_from_user_id, \
+                  build_canvas_url, make_new_directory
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -21,19 +17,19 @@ parser.add_option("-i", "--assignment-id",
                   dest="assignment_id", default=None, type=int,
                   help="The Canvas assignment_id of the assignment to download.")
 parser.add_option("-d", "--parent-directory",
-                  dest="parent_directory", default="./",
+                  dest="parent_directory", default="submissions/",
                   help="The path to download the submissions to.  Each submission will be downloaded to a subdirectory "
-                       "of the parent directory: <download_directory>/<netid>/<assignment_name>/")
+                       "of the parent directory: <parent_directory>/<netid>/<assignment_name>/")
 parser.add_option("-r", "--roster",
-                  dest="roster", default=None, type=str,
+                  dest="roster", default=os.path.join("resources","roster.csv"), type=str,
                   help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
-                       "'netid' and 'user_id'.")
+                       "'login_id' (e.g. awp066) and 'id' (the Canvas user_id).")
 parser.add_option("-L", "--assignment_list",
-                  dest="assignment_list", default=None, type=str,
+                  dest="assignment_list", default=os.path.join("resources","assignments.csv"), type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
-                       "'assignment_name' and 'assignment_id'.")
+                       "'name' and 'id'.")
 parser.add_option("-t", "--token-json-file",
-                  dest="token_json_file", default=None, type=str,
+                  dest="token_json_file", default=os.path.join("resources","token.json"), type=str,
                   help="The path to a .json file containing the Canvas authorization token.")
 
 
@@ -47,6 +43,14 @@ def get_or_make_directory(parent_directory, subdirectory):
         os.mkdir(target_directory, 0755)
         return target_directory
 
+
+def build_submissions_url(course_id, assignment_id, page_num):
+    api_subdirectories = ["courses", course_id, "assignments", assignment_id, "submissions"]
+    url = build_canvas_url(api_subdirectories, page_num)
+
+    return url
+
+
 if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
@@ -55,19 +59,16 @@ if __name__ == "__main__":
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
 
-    #token_json_file = get_file_local_or_full(script_dir, options.token_json_file)
     token_json_file = options.token_json_file
     assert os.path.isfile(token_json_file), "token_json_file is not a file: %s" % token_json_file
 
-    #roster_file = get_file_local_or_full(script_dir, options.roster)
     roster_file = options.roster
     assert os.path.isfile(roster_file), "roster_file is not a file: %s" % roster_file
 
-    #parent_directory = get_dir_local_or_full(script_dir, options.parent_directory)
     parent_directory = options.parent_directory
-    assert os.path.isdir(parent_directory), "parent_directory is not a directory: %s" % parent_directory
+    if not os.path.isdir(parent_directory):
+        parent_directory = make_new_directory("parent_directory", parent_directory)
 
-    #assignment_list = get_file_local_or_full(script_dir, options.assignment_list)
     assignment_list = options.assignment_list
     assert os.path.isfile(assignment_list), "assignment_list is not a file: %s" % assignment_list
 
@@ -76,31 +77,38 @@ if __name__ == "__main__":
 
     assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
 
+    token = get_token(token_json_file)
+    url = build_submissions_url(course_id, assignment_id, page_num=1)
+    submissions = []
+    download_all_objects_to_list(url, token, mylist=submissions)
+
     plist = {}
-    with open(roster_file) as csvfile:
-        reader = csv.DictReader(csvfile)
-        for student in reader:
-            user_id = student["user_id"]
-            netid = student["netid"]
+    for submission in submissions:
+        user_id = submission["user_id"]
+        netid = get_netid_from_user_id(user_id, roster_file)
 
-            if len(netid) < 1 or len(user_id) < 1:
-                continue
+        if len(netid) < 1 or len(str(user_id)) < 1:
+            print("skipping netid: " + str(netid) + " user_id: " + str(user_id))
+            continue
 
-            netid_directory = get_or_make_directory(parent_directory, netid)
-            assignment_directory = os.path.join(netid_directory, assignment_name)
+        netid_directory = get_or_make_directory(parent_directory, netid)
+        assignment_directory = os.path.join(netid_directory, assignment_name)
 
-            print("downloading submission for netid: " + netid)
-            p = subprocess.Popen(["python", "download_submission.py",
-                                  "-c", str(course_id),
-                                  "-a", assignment_name,
-                                  "-i", str(assignment_id),
-                                  "-u", user_id,
-                                  "-n", netid,
-                                  "-r", roster_file,
-                                  "-L", assignment_list,
-                                  "-d", assignment_directory,
-                                  "-t", token_json_file])
-            plist[netid] = p
+        print("downloading submission for netid: " + netid)
+        args = ["python", "download_submission.py",
+                  "-c", str(course_id),
+                  "-a", assignment_name,
+                  "-i", str(assignment_id),
+                  "-u", str(user_id),
+                  "-n", netid,
+                  "-r", roster_file,
+                  "-L", assignment_list,
+                  "-d", assignment_directory,
+                  "-t", token_json_file]
+        args_as_string = " ".join(args)
+        print("calling " + args_as_string)
+        p = subprocess.Popen(args)
+        plist[netid] = p
 
     for netid in plist:
         p = plist[netid]
