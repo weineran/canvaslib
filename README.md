@@ -2,7 +2,7 @@
 A Python library for interacting with Canvas LMS via APIs
 
 ## Setup
-After cloning this repo, run `setup.py` and follow the instructions.  This will involve generating a Canvas authentication token.
+After cloning this repo, run `python setup.py` and follow the instructions.  This will involve generating a Canvas authentication token.
 
 When complete, your token will be saved to a file in your project directory.
 
