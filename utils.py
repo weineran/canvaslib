@@ -118,15 +118,31 @@ def download_all_objects_to_list(url, token, mylist):
 
         should_continue, url = get_next_page_url(page)
 
+def write_header_row(writer, fieldnames):
+    assert isinstance(writer, csv.DictWriter), "writer is not a DictWriter: %s" % writer
+    assert isinstance(fieldnames, list), "fieldnames is not a list: %s" % fieldnames
+
+    header_row = {}
+    for fieldname in fieldnames:
+        header_row[fieldname] = fieldname
+
+    writer.writerow(header_row)
+
+    return
+
 
 def write_list_to_csv(mylist, destination):
     assert isinstance(mylist, list), "mylist is not a list: %s" % mylist
     assert isinstance(destination, str), "destination is not a string: %s" % destination
 
     with open(destination, "w") as f:
-        writer = csv.DictWriter(f, fieldnames=mylist[0].keys())
+        fieldnames = mylist[0].keys()
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
 
-        writer.writeheader()
+        # write header row
+        # writer.writeheader()  # apparently this doesn't work in Python 2.6
+        write_header_row(writer, fieldnames)
+
         for item in mylist:
             writer.writerow(item)
 
