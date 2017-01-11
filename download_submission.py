@@ -42,6 +42,7 @@ parser.add_option("-t", "--token-json-file",
 
 
 def get_filename(assignment_name, netid):
+    # TODO remove this function?
     assert isinstance(assignment_name, str)
     if not isinstance(netid, str):
         netid = ""
@@ -94,7 +95,8 @@ if __name__ == "__main__":
     if not os.path.isdir(download_directory):
         os.mkdir(download_directory, 0755)
 
-    filename = get_filename(assignment_name, netid)
+    #filename = get_filename(assignment_name, netid)
+    filename = attachments[0]["filename"]
     download_path = os.path.join(download_directory, filename)
 
     request = urllib2.Request(file_url)
