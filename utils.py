@@ -165,7 +165,7 @@ def build_canvas_url(api_subdirectories, params):
     return url
 
 
-def get_assignment_name_and_id(assignment_name, assignment_id, assignment_list, course_id):
+def get_assignment_name_and_id(assignment_name, assignment_id, assignment_list, course_id=None):
     assert (assignment_name != None or assignment_id != None), "assignment_name and assignment_id cannot both be None"
 
     if assignment_name != None:
@@ -193,7 +193,7 @@ def get_attribute_from_csv_using_search_attribute(search_key, search_value, targ
     raise Exception("Key-value [" + search_key + "=" + str(search_value) + "] not found in csv file [" + csv_file + "]")
 
 
-def get_assignment_id_from_assignment_name(assignment_name, assignment_list, course_id):
+def get_assignment_id_from_assignment_name(assignment_name, assignment_list, course_id=None):
     search_key = "name"
     search_value = assignment_name
     target_key = "id"
