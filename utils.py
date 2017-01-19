@@ -2,6 +2,7 @@ import json
 import urllib2
 import os
 import csv
+from setup import download_assignments
 
 
 def make_new_directory(dir_name, path):
@@ -108,15 +109,27 @@ def download_all_objects_to_list(url, token, mylist):
 
     while should_continue == True:
         page = open_canvas_page(url, token)
-        response = page.read().decode("unicode-escape").encode("ascii", "ignore")
-        #response = response.decode()
+        response = page.read().decode('utf-8', "ignore").encode("ascii", "ignore")
+        #response = response.decode("unicode-escape").encode("ascii", "ignore")
         #print(response)
         response = json.loads(response)
 
-        for user in response:
-            mylist.append(user)
+        for item in response:
+            mylist.append(item)
 
         should_continue, url = get_next_page_url(page)
+
+def write_header_row(writer, fieldnames):
+    assert isinstance(writer, csv.DictWriter), "writer is not a DictWriter: %s" % writer
+    assert isinstance(fieldnames, list), "fieldnames is not a list: %s" % fieldnames
+
+    header_row = {}
+    for fieldname in fieldnames:
+        header_row[fieldname] = fieldname
+
+    writer.writerow(header_row)
+
+    return
 
 
 def write_list_to_csv(mylist, destination):
@@ -124,9 +137,13 @@ def write_list_to_csv(mylist, destination):
     assert isinstance(destination, str), "destination is not a string: %s" % destination
 
     with open(destination, "w") as f:
-        writer = csv.DictWriter(f, fieldnames=mylist[0].keys())
+        fieldnames = mylist[0].keys()
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
 
-        writer.writeheader()
+        # write header row
+        # writer.writeheader()  # apparently this doesn't work in Python 2.6
+        write_header_row(writer, fieldnames)
+
         for item in mylist:
             writer.writerow(item)
 
@@ -148,7 +165,7 @@ def build_canvas_url(api_subdirectories, params):
     return url
 
 
-def get_assignment_name_and_id(assignment_name, assignment_id, assignment_list):
+def get_assignment_name_and_id(assignment_name, assignment_id, assignment_list, course_id=None):
     assert (assignment_name != None or assignment_id != None), "assignment_name and assignment_id cannot both be None"
 
     if assignment_name != None:
@@ -159,7 +176,7 @@ def get_assignment_name_and_id(assignment_name, assignment_id, assignment_list):
     if assignment_name != None and assignment_id != None:
         return assignment_name, assignment_id
     if assignment_name != None:
-        return assignment_name, get_assignment_id_from_assignment_name(assignment_name, assignment_list)
+        return assignment_name, get_assignment_id_from_assignment_name(assignment_name, assignment_list, course_id)
     if assignment_id != None:
         return get_assignment_name_from_assignment_id(assignment_id, assignment_list), assignment_id
 
@@ -176,11 +193,16 @@ def get_attribute_from_csv_using_search_attribute(search_key, search_value, targ
     raise Exception("Key-value [" + search_key + "=" + str(search_value) + "] not found in csv file [" + csv_file + "]")
 
 
-def get_assignment_id_from_assignment_name(assignment_name, assignment_list):
+def get_assignment_id_from_assignment_name(assignment_name, assignment_list, course_id=None):
     search_key = "name"
     search_value = assignment_name
     target_key = "id"
-    assignment_id = int(get_attribute_from_csv_using_search_attribute(search_key, search_value, target_key, assignment_list))
+    try:
+        assignment_id = int(get_attribute_from_csv_using_search_attribute(search_key, search_value, target_key, assignment_list))
+    except:
+        print("Failed to get assignment_id from assignment_name.  Trying to resolve by downloading the latest assignment list from Canvas.")
+        download_assignments(course_id)
+        assignment_id = int(get_attribute_from_csv_using_search_attribute(search_key, search_value, target_key, assignment_list))
 
     return assignment_id
 

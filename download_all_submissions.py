@@ -78,7 +78,7 @@ if __name__ == "__main__":
     assignment_name = options.assignment_name
     assignment_id = options.assignment_id
 
-    assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
+    assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list, course_id)
 
     token = get_token(token_json_file)
     url = build_submissions_url(course_id, assignment_id, page_num=1)
