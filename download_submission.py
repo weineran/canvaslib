@@ -29,11 +29,19 @@ parser.add_option("-u", "--user-id",
                   dest="user_id", default=None, type=int,
                   help="The Canvas user_id of the student whose assignment you wish to download.")
 parser.add_option("-r", "--roster",
-                  dest="roster", default=os.path.join("resources","roster.csv"), type=str,
+                  dest="roster",
+                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                       "resources",
+                                       "roster.csv"),
+                  type=str,
                   help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
                        "'login_id' (e.g. awp066) and 'id' (the Canvas user_id).")
 parser.add_option("-L", "--assignment_list",
-                  dest="assignment_list", default=os.path.join("resources","assignments.csv"), type=str,
+                  dest="assignment_list",
+                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                       "resources",
+                                       "assignments.csv"),
+                  type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
                        "'assignment_name' and 'assignment_id'.")
 parser.add_option("-t", "--token-json-file",
