@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     # change directory into the temporary directory
     os.chdir(destination_directory)
-    f = open("test.txt")
+    f = open("test.txt", "w")
     f.close()
 
     # run the autograder command, piping output to autograder_results.txt
