@@ -2,6 +2,8 @@ from optparse import OptionParser
 import os
 from utils import get_assignment_name_and_id, get_netid_and_user_id
 import shutil
+import subprocess
+import json
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -96,12 +98,29 @@ if __name__ == "__main__":
 
     # change directory into the temporary directory
     os.chdir(destination_directory)
-    f = open("test.txt", "w")
-    f.close()
 
     # run the autograder command, piping output to autograder_results.txt
+    results_file = "autograder_results.txt"
+    with open(results_file, "w") as f:
+        args = autograder_command.split(" ")
+        subprocess.call(args, stdout=f)
+
+    # process json summary and print it out
+    lines = open(results_file, "r").readlines()
+    summary  = json.loads(lines[-1])
+    if "submitter_login_id" in summary.keys():
+        submitter_login_id = str(summary["submitter_login_id"])
+        if submitter_login_id.endswith("_tmp"):
+            submitter_login_id = submitter_login_id[:-4]
+            summary["submitter_login_id"] = submitter_login_id
+    lines[-1] = json.dumps(summary)
+    open(results_file,"w").writelines(lines)
+    print("Summary:")
+    print(lines[-1])
 
     # copy autograder_results.txt to the student's assignment subdirectory
+    shutil.copy2(results_file, assignment_directory)
 
     # delete the temporary directory
+    shutil.rmtree(temp_directory)
 
