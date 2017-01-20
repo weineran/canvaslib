@@ -22,6 +22,10 @@ parser.add_option("-i", "--assignment-id",
 parser.add_option("-d", "--download-directory",
                   dest="download_directory", default=os.getcwd(),
                   help="The path to download the submission to.")
+parser.add_option("-o", "--download-filename",
+                  dest="download_filename", default=None, type=str,
+                  help="The name to give the downloaded file.  If omitted, the name of the student's uploaded file "
+                       "will be used.")
 parser.add_option("-n", "--netid",
                   dest="netid", default=None,
                   help="The netid of the student whose assignment you wish to download.")
@@ -103,8 +107,10 @@ if __name__ == "__main__":
     if not os.path.isdir(download_directory):
         os.mkdir(download_directory, 0755)
 
-    #filename = get_filename(assignment_name, netid)
-    filename = attachments[0]["filename"]
+    filename = options.download_filename
+    if filename is None:
+        filename = attachments[0]["filename"]
+
     download_path = os.path.join(download_directory, filename)
 
     request = urllib2.Request(file_url)

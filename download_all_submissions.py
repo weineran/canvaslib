@@ -22,6 +22,10 @@ parser.add_option("-d", "--parent-directory",
                   dest="parent_directory", default="submissions/",
                   help="The path to download the submissions to.  Each submission will be downloaded to a subdirectory "
                        "of the parent directory: <parent_directory>/<netid>/<assignment_name>/")
+parser.add_option("-o", "--download-filename",
+                  dest="download_filename", default=None, type=str,
+                  help="The name to give the downloaded files.  If omitted, the name of each student's uploaded file "
+                       "will be used.")
 parser.add_option("-r", "--roster",
                   dest="roster", default=os.path.join("resources","roster.csv"), type=str,
                   help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
@@ -56,6 +60,8 @@ def build_submissions_url(course_id, assignment_id, page_num):
 
 if __name__ == "__main__":
     (options, args) = parser.parse_args()
+
+    download_filename = options.download_filename
 
     course_id = options.course_id
     assert isinstance(course_id, int), "course_id is not an int: %s" % course_id
@@ -107,6 +113,10 @@ if __name__ == "__main__":
                   "-L", assignment_list,
                   "-d", assignment_directory,
                   "-t", token_json_file]
+
+        if download_filename is not None:
+            args.extend(["-o", download_filename])
+
         args_as_string = " ".join(args)
         #print("calling " + args_as_string)
         p = subprocess.Popen(args)
