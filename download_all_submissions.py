@@ -92,6 +92,7 @@ if __name__ == "__main__":
     download_all_objects_to_list(url, token, mylist=submissions)
 
     plist = {}
+    count = 0
     for submission in submissions:
         user_id = submission["user_id"]
         netid = get_netid_from_user_id(user_id, roster_file)
@@ -125,6 +126,9 @@ if __name__ == "__main__":
     for netid in plist:
         p = plist[netid]
         p.wait()
-        #print(netid + " " + str(p.returncode))
+        if p.returncode == 0:
+            count += 1
+
+    print("%d submissions downloaded" % count)
 
 

@@ -4,12 +4,14 @@ from utils import get_assignment_name_and_id, get_netid_and_user_id
 import shutil
 import subprocess
 import json
+import sys
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
                       description="Grade a single submission.  Not all arguments are required.                "
                                   "For example, try:                                                             "
-                                  "python " + __file__ + " -d <submissions-directory> -a <assignment_name> -u <user_id>")
+                                  "python " + __file__ + " -d <submissions-directory> -a <assignment_name> -l <login_id> "
+                                                         "-C 'python <your-autograder-script>'")
 parser.add_option("-d", "--submissions-directory",
                   dest="submissions_directory", default=None, type=str,
                   help="The path to the submissions directory.  The submissions directory contains subdirectories for "
@@ -42,14 +44,15 @@ parser.add_option("-L", "--assignment_list",
                   type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
                        "'assignment_name' and 'assignment_id'.")
-parser.add_option("-c", "--autograder-command",
+parser.add_option("-C", "--autograder-command",
                   dest="autograder_command", default=None, type=str,
                   help="A command which, when run from within the student's assignment subdirectory, would "
                        "automatically grade the student's submission, printing the results to stdout.  The last line of "
                        "the output must be in JSON format with the following fields:                          "
                        "{'points_possible': <int>, "
                        "'points_received': <int>, "
-                       "'team_login_ids': [login_id_1, login_id_2, ...]}")
+                       "'team_login_ids': [login_id_1, login_id_2, ...]}"
+                       "It may optionally contain the field 'submitter_login_id': <login_id>")
 
 
 if __name__ == "__main__":
@@ -87,6 +90,10 @@ if __name__ == "__main__":
 
     assignment_directory = os.path.join(submissions_directory, login_id, assignment_name)
 
+    if not os.path.isdir(assignment_directory):
+        print("Directory does not exist: %s" % assignment_directory)
+        sys.exit(1)
+
     # make a temporary directory in the submissions directory (to be safe, make it the same depth as actual assignment
     # subdirectory
     temp_directory = os.path.join(submissions_directory, login_id + "_tmp")
@@ -103,16 +110,20 @@ if __name__ == "__main__":
     results_file = "autograder_results.txt"
     with open(results_file, "w") as f:
         args = autograder_command.split(" ")
-        subprocess.call(args, stdout=f)
+        subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
 
     # process json summary and print it out
     lines = open(results_file, "r").readlines()
     summary  = json.loads(lines[-1])
+
     if "submitter_login_id" in summary.keys():
         submitter_login_id = str(summary["submitter_login_id"])
         if submitter_login_id.endswith("_tmp"):
             submitter_login_id = submitter_login_id[:-4]
             summary["submitter_login_id"] = submitter_login_id
+    else:
+        summary["submitter_login_id"] = login_id
+
     lines[-1] = json.dumps(summary)
     open(results_file,"w").writelines(lines)
     print("Summary:")
