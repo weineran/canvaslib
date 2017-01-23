@@ -1,8 +1,153 @@
 import json
-import urllib2
+import urllib2, urllib
 import os
 import csv
 from setup import download_assignments
+import urllib2_extension
+import subprocess
+
+
+log_filename = "canvaslib.log"
+
+
+def write_to_log(message):
+    assert isinstance(message, str) or isinstance(message, unicode), "message is not a string: %s" % message
+
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), log_filename)
+
+    with open(file_path, "a") as f:
+        f.write(message + "\n")
+
+
+def post_multipart_form(url, data, files, headers=[]):
+    assert isinstance(url, str), "url is not a string: %s" % url
+    assert isinstance(data, dict), "data is not a dict: %s" % data
+    assert isinstance(files, dict), "files is not a dict: %s" % files
+
+    form = urllib2_extension.MultiPartForm()
+
+    for field in data:
+        form.add_field(field, data[field])
+
+    for fieldname in files:
+        this_file = files[fieldname]
+        with open(this_file, "rb") as f:
+            form.add_file(fieldname, this_file, f)
+
+    request = urllib2.Request(url)
+
+    for headername in headers:
+        request.add_header(headername, headers[headername])
+
+    body = str(form)
+    request.add_data(body)
+
+    return urllib2.urlopen(request)
+
+
+def get_header(header_name, headers):
+    assert isinstance(header_name, str), "header_name is not a string: %s" % header_name
+    assert isinstance(headers, list), "headers is not a list: %s" % headers
+
+    for header in headers:
+        assert isinstance(header, str)
+        if header.startswith(header_name + ":") or header.startswith(header_name.lower() + ":"):
+            return header[len(header_name + ":"):].strip()
+
+    return None
+
+
+def put_using_curl(url, token, data):
+    assert isinstance(url, str), "url is not a string: %s" % url
+    assert isinstance(token, str), "token is not a string: %s" % token
+    assert isinstance(data, dict), "data is not a dict: %s" % data
+
+    headers = {"Authorization": "Bearer %s" % token}
+
+    result, headers = do_curl(url, method="PUT", data=data, headers=headers)
+
+    return result, headers
+
+
+def do_curl(url, method=None, data={}, headers={}, files={}):
+    assert isinstance(url, str), "url is not a string: %s" % url
+    assert method in ["PUT", "GET", "POST", "HEAD", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH", None], \
+        "Not a valid method: %s" % method
+    if data:
+        assert isinstance(data, dict), "data is not a dict: %s" % data
+    if headers:
+        assert isinstance(headers, dict), "headers is not a dict: %s" % headers
+    if files:
+        assert isinstance(files, dict), "files is not a dict: %s" % files
+
+    args = ["curl"]
+
+    if method:
+        args.extend(["-X", method])
+
+    args.append(url)
+
+    if method == "PUT":
+        data_flag = "-d"
+    else:
+        data_flag = "-F"
+
+    for header_name in headers:
+        #args.extend(["-H", header_name+"="+urllib.quote(str(headers[header_name]))])
+        #args.extend(["-H", "\""+header_name + ": " + headers[header_name]+"\""])
+        args.extend(["-H", header_name + ": " + headers[header_name]])
+
+    for param_name in data:
+        args.extend([data_flag, param_name+"="+urllib.quote(str(data[param_name]))])
+
+    for param_name in files:
+        args.extend([data_flag, param_name+"="+str(files[param_name])])
+
+    headers_file = "resp_headers.txt"
+    args.extend(["-D", headers_file])
+
+    # args.append("-v")
+    # args.extend(["--trace", "-"])
+
+    print(" ".join(args))
+    p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    p.wait()
+    result = p.stdout.read()
+    #result = subprocess.call(args)
+
+    with open(headers_file, "r") as f:
+        resp_headers = f.readlines()
+
+    os.remove(headers_file)
+
+    return result, resp_headers
+
+
+def post_file_using_curl(url, data, file):
+    assert isinstance(url, str), "url is not a string: %s" % url
+    assert isinstance(data, dict), "data is not a dict: %s" % data
+    assert os.path.isfile(file), "file is not a file: %s" % file
+
+    args = ["curl", url]
+
+    for param_name in data:
+        args.append("-F")
+        args.append(param_name+"="+str(data[param_name]))
+
+    args.append("-F")
+    args.append("file=@"+file)
+
+    args.extend(["-D", "headers.txt"])
+
+    print(" ".join(args))
+    p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    p.wait()
+    result = p.stdout.read()
+
+    with open("headers.txt", "r") as f:
+        headers = f.readlines()
+
+    return result, headers
 
 
 def make_new_directory(dir_name, path):
@@ -32,15 +177,25 @@ def get_token(token_json_file):
     return token
 
 
-def open_canvas_page(url, token):
-    assert isinstance(url, str)
-    assert isinstance(token, str)
+def open_canvas_page(url, token, data=None, method=None):
+    assert isinstance(url, str), "url is not a string: %s" % url
+    assert isinstance(token, str), "token is not a string: %s" % token
 
-    request = urllib2.Request(url)
+    #request = urllib2.Request(url)
+    request = urllib2_extension.MethodRequest(url, method)
     request.add_header("Authorization", "Bearer %s" % token)
+
+    if data:
+        request.add_data(urllib.urlencode(data))
+
     page = urllib2.urlopen(request)
 
     return page
+
+
+def open_canvas_page_as_string(url, token, data=None, method=None):
+    #return urllib.unquote(open_canvas_page(url, token, data, method).read())
+    return open_canvas_page(url, token, data, method).read()
 
 
 def are_more_pages_remaining(page):
@@ -148,7 +303,7 @@ def write_list_to_csv(mylist, destination):
             writer.writerow(item)
 
 
-def build_canvas_url(api_subdirectories, params):
+def build_canvas_url(api_subdirectories, params={}):
     assert isinstance(api_subdirectories, list)
     assert isinstance(params, dict)
 

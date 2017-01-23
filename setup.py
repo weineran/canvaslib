@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     resources_dir = "resources"
     if not os.path.isdir(resources_dir):
-        os.mkdir(resources_dir, 0600)
+        os.mkdir(resources_dir, 0700)
 
     token_filename = os.path.join(resources_dir, "token.json")
 

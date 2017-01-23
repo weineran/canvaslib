@@ -2,7 +2,7 @@ from optparse import OptionParser
 import os
 import subprocess
 from utils import get_token, download_all_objects_to_list, get_assignment_name_and_id, get_netid_from_user_id, \
-                  build_canvas_url, make_new_directory
+                  build_canvas_url, make_new_directory, write_to_log
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -98,7 +98,9 @@ if __name__ == "__main__":
         netid = get_netid_from_user_id(user_id, roster_file)
 
         if len(netid) < 1 or len(str(user_id)) < 1:
-            print("skipping netid: " + str(netid) + " user_id: " + str(user_id))
+            msg = "%s: skipping netid [%s] user_id [%s]" % (__file__, netid, user_id)
+            print(msg)
+            write_to_log(msg)
             continue
 
         netid_directory = get_or_make_directory(parent_directory, netid)
@@ -129,6 +131,8 @@ if __name__ == "__main__":
         if p.returncode == 0:
             count += 1
 
-    print("%d submissions downloaded" % count)
+    msg = "%d submissions downloaded" % count
+    print(msg)
+    write_to_log(msg)
 
 

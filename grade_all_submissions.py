@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import os
-from utils import get_assignment_name_and_id
+from utils import get_assignment_name_and_id, write_to_log
 import subprocess
 import time
 
@@ -67,6 +67,7 @@ if __name__ == "__main__":
     netids = os.listdir(submissions_directory)
 
     count = 0
+    fail_count = 0
     plist = {}
     for netid in netids:
         print("Attempting to grade submissions for: %s" % netid)
@@ -86,7 +87,19 @@ if __name__ == "__main__":
         p.wait()
         if p.returncode == 0:
             count += 1
+        else:
+            fail_count +=1
 
     duration = time.time() - start
-    print("%d submissions graded" % count)
-    print("%d seconds elapsed" % duration)
+
+    msg = "%d submissions graded" % count
+    write_to_log(msg)
+    print(msg)
+
+    msg = "%d submissions failed to grade" % fail_count
+    write_to_log(msg)
+    print(msg)
+
+    msg = "%d seconds elapsed" % duration
+    write_to_log(msg)
+    print(msg)

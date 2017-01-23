@@ -3,7 +3,9 @@ import urllib2
 import json
 import os
 import sys
-from utils import get_assignment_name_and_id, get_netid_and_user_id, build_canvas_url, open_canvas_page, get_token
+import datetime
+from utils import get_assignment_name_and_id, get_netid_and_user_id, build_canvas_url, open_canvas_page_as_string, \
+                  get_token, write_to_log
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -82,28 +84,62 @@ if __name__ == "__main__":
     assignment_id = options.assignment_id
     assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
 
+    download_directory = options.download_directory
+
     # e.g. user_id = "44648"
     netid = options.netid
     user_id = options.user_id
     netid, user_id = get_netid_and_user_id(netid, user_id, roster_file)
 
+    # download assignment info
+    url = build_canvas_url(["courses", course_id, "assignments", assignment_id], params={})
+    assignment_response = open_canvas_page_as_string(url, token)
+    assignment_response = json.loads(assignment_response)
+    assignment_summary_path = os.path.join(download_directory, "assignment.json")
+    with open(assignment_summary_path, "w") as f:
+        json.dump(assignment_response, f)
+
     url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], params={})
-    page = open_canvas_page(url, token)
-    response = json.loads(page.read())
+    response = open_canvas_page_as_string(url, token)
+    response = json.loads(response)
+
+    # only download new submissions
+    submission_summary_file = "submission.json"
+    submission_summary_path = os.path.join(download_directory, submission_summary_file)
+    if os.path.isfile(os.path.join(download_directory, submission_summary_file)):
+        submission_summary = {}
+        with open(submission_summary_path, "r") as f:
+            submission_summary = json.load(f)
+
+        local_submitted_at = datetime.datetime.strptime(submission_summary["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
+
+        if response["submitted_at"] != "null":
+            remote_submitted_at = datetime.datetime.strptime(response["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
+
+            if not (remote_submitted_at > local_submitted_at):
+                # if the submission is not newer than the one we already have, skip it
+                msg = "%s: remote submission [%s] not newer than local submission [%s]. Exiting." % \
+                      (__file__, submission_summary["submitted_at"], response["submitted_at"])
+                print(msg)
+                write_to_log(msg)
+                sys.exit(1)
 
     if "attachments" not in response:
-        print("No attachments submitted for netid: " + netid + " user_id: " + str(user_id) + ".  Exiting.")
-        sys.exit(1)
+        msg = "%s: No attachments submitted for netid [%s] user_id [%s]. Exiting." % (__file__, netid, user_id)
+        print(msg)
+        write_to_log(msg)
+        sys.exit(2)
 
     attachments = response["attachments"]
 
     if len(attachments) != 1:
-        print("Expected 1 attachment, got: " + str(len(attachments)) + "  Exiting.")
-        sys.exit(2)
+        msg = "%s: Expected 1 attachment, got [%s]. Exiting." % (__file__, len(attachments))
+        print(msg)
+        write_to_log(msg)
+        sys.exit(3)
 
     # if we get this far, we're doing the download
     file_url = attachments[0]["url"]
-    download_directory = options.download_directory
     if not os.path.isdir(download_directory):
         os.mkdir(download_directory, 0755)
 
@@ -114,6 +150,23 @@ if __name__ == "__main__":
     download_path = os.path.join(download_directory, filename)
 
     request = urllib2.Request(file_url)
-    response = urllib2.urlopen(request)
+    download_response = urllib2.urlopen(request)
     with open(download_path, "wb") as local_file:
-        local_file.write(response.read())
+        local_file.write(download_response.read())
+
+    # update summary file and history file (list of all summaries)
+    submissions_history_file = "submissions_history.json"
+    submissions_history_path = os.path.join(download_directory, submissions_history_file)
+    if os.path.isfile(submissions_history_path):
+        with open(submissions_history_path, "r") as f:
+            submissions_history = json.load(f)
+    else:
+        submissions_history = []
+
+    submissions_history.append(response)
+    with open(submissions_history_path, "w") as f:
+        json.dump(submissions_history, f)
+
+    with open(submission_summary_path, "w") as f:
+        json.dump(response, f)
+

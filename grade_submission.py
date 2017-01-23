@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import os
-from utils import get_assignment_name_and_id, get_netid_and_user_id
+from utils import get_assignment_name_and_id, get_netid_and_user_id, write_to_log
 import shutil
 import subprocess
 import json
@@ -114,7 +114,15 @@ if __name__ == "__main__":
 
     # process json summary and print it out
     lines = open(results_file, "r").readlines()
-    summary  = json.loads(lines[-1])
+    try:
+        summary  = json.loads(lines[-1])
+    except ValueError as E:
+        msg = "%s: for student [%s], error [%s]" % (__file__, login_id, E)
+        write_to_log(msg)
+        print(msg)
+        shutil.rmtree(temp_directory)
+        sys.exit(2)
+
 
     if "submitter_login_id" in summary.keys():
         submitter_login_id = str(summary["submitter_login_id"])
@@ -123,6 +131,15 @@ if __name__ == "__main__":
             summary["submitter_login_id"] = submitter_login_id
     else:
         summary["submitter_login_id"] = login_id
+
+    clean_netids = []
+    dirty_netids = summary["team_login_ids"]
+    for netid in dirty_netids:
+        if netid.endswith("_tmp"):
+            netid = netid[:-4]
+        clean_netids.append(netid)
+
+    summary["team_login_ids"] = clean_netids
 
     lines[-1] = json.dumps(summary)
     open(results_file,"w").writelines(lines)
