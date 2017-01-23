@@ -6,6 +6,7 @@ import subprocess
 import csv
 import copy
 import sys
+import time
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -40,6 +41,8 @@ parser.add_option("-c", "--course-id",
 
 
 if __name__ == "__main__":
+    start = time.time()
+
     (options, args) = parser.parse_args()
 
     submissions_directory = options.submissions_directory
@@ -145,10 +148,16 @@ if __name__ == "__main__":
         for item in grades:
             writer.writerow(item)
 
+    duration = time.time() - start
+
     msg = "%d grades uploaded successfully" % count
     write_to_log(msg)
     print(msg)
 
     msg = "%d grades failed to upload" % fail_count
+    write_to_log(msg)
+    print(msg)
+
+    msg = "%d seconds elapsed" % duration
     write_to_log(msg)
     print(msg)
