@@ -4,4 +4,6 @@
 resources/
 .DS_Store
 submissions/
+*.log
+*.csv
 
