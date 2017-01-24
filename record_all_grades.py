@@ -7,6 +7,7 @@ import csv
 import copy
 import sys
 import time
+import datetime
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -38,6 +39,61 @@ parser.add_option("-U", "--upload-results",
 parser.add_option("-c", "--course-id",
                   dest="course_id", default=None, type=int,
                   help="The Canvas course_id.  e.g. 43589.  Only required when uploading results.")
+
+
+def record_uploaded_version(autograder_summary, student):
+    '''
+    Update the autograder_summary so that uploaded_version matches graded_version
+    :param autograder_summary: dictionary containing the autograder summary
+    :param student: login_id (netid) of student
+    :return: None
+    '''
+    assert isinstance(autograder_summary, dict)
+    assert isinstance(student, str), "student is not a string: %s" % student
+
+    if "uploaded_version" not in autograder_summary.keys():
+        autograder_summary["uploaded_version"] = {}
+
+    autograder_summary["uploaded_version"][student] = autograder_summary["graded_version"]
+
+
+def check_grade_is_new(autograder_summary, student):
+    '''
+    Check whether there is a new grade since the last time a grade was uploaded.
+    :param autograder_summary: dictionary containing the autograder summary
+    :param student: login_id (netid) of student
+    :return: boolean
+    '''
+    assert isinstance(autograder_summary, dict)
+    assert isinstance(student, str), "student is not a string: %s" % student
+
+    if "uploaded_version" in autograder_summary.keys():
+        # get uploaded version time of this student
+        uploaded_version = autograder_summary["uploaded_version"]
+        assert isinstance(uploaded_version, dict)
+        if student in uploaded_version.keys():
+            uploaded_version_student = uploaded_version[student]
+        else:
+            # assume grade for this student has never been uploaded
+            return False
+    else:
+        # assume grade has never been uploaded, so must upload
+        return True
+
+    if "graded_version" in autograder_summary.keys():
+        graded_version = autograder_summary["graded_version"]
+    else:
+        # assume the submission has not yet been graded, so don't upload anything
+        return False
+
+    uploaded_version_student_time = datetime.datetime.strptime(uploaded_version_student, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+
+    if uploaded_version_student_time >= graded_version_time:
+        # if the uploaded version is more recent or the same as the graded version, do not re-upload
+        return False
+    else:
+        return True
 
 
 if __name__ == "__main__":
@@ -101,42 +157,51 @@ if __name__ == "__main__":
         last_line = lines[-1]
 
         try:
-            summary = json.loads(last_line)
+            autograder_summary = json.loads(last_line)
         except ValueError as E:
             msg = "%s: Unable to load summary [%s]" % (__file__, E)
             write_to_log(msg)
             print(msg)
             continue
         else:
-            assert isinstance(summary, dict)
+            assert isinstance(autograder_summary , dict)
 
-        team_netids = summary["team_login_ids"]
-        points_received = summary["points_received"]
-        points_possible = summary["points_possible"]
+        team_netids = autograder_summary ["team_login_ids"]
+        points_received = autograder_summary ["points_received"]
+        points_possible = autograder_summary ["points_possible"]
         percent = float(points_received) / float(points_possible) * 100
         percent_as_string = "{0:0.1f}%".format(percent)
 
-        summary["percent_as_string"] = percent_as_string
-        summary["student"] = ""
+        autograder_summary["percent_as_string"] = percent_as_string
+        autograder_summary["student"] = ""
 
         # inner loop to handle each individual student
         for student in team_netids:
-            summary.update({"student": student})
-            grades.append(copy.deepcopy(summary))
+            can_do_upload = check_grade_is_new(autograder_summary, str(student))
+
+            autograder_summary.update({"student": student})
+            grades.append(copy.deepcopy(autograder_summary ))
 
             if upload_results == True:
-                args = ["python", "upload_result_comment.py",
-                        "-c", str(course_id),
-                        "-f", autograder_results,
-                        "-g", percent_as_string,
-                        "-a", assignment_name,
-                        "-l", student]
-                return_code = subprocess.call(args)
+                if can_do_upload:
+                    args = ["python", "upload_result_comment.py",
+                            "-c", str(course_id),
+                            "-f", autograder_results,
+                            "-g", percent_as_string,
+                            "-a", assignment_name,
+                            "-l", student]
+                    return_code = subprocess.call(args)
 
-                if return_code == 0:
-                    count += 1
+                    if return_code == 0:
+                        count += 1
+                        record_uploaded_version(autograder_summary, student)
+                    else:
+                        fail_count += 1
                 else:
-                    fail_count += 1
+                    msg = "%s: Grade is not new for netid [%s].  Skipping upload." % (__file__, student)
+                    write_to_log(msg)
+                    print(msg)
+                    continue
 
     grades_csv = os.path.join(submissions_directory, "..", assignment_name + "_grades.csv")
     with open(grades_csv, "w") as f:

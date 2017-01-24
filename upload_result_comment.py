@@ -94,6 +94,7 @@ if __name__ == "__main__":
     token = get_token(token_json_file)
 
     # upload file in 3 steps
+    # (https://canvas.instructure.com/doc/api/file.file_uploads.html#method.file_uploads.post)
     # step 1
     url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id, "comments",
                             "files"], params={})
@@ -109,11 +110,8 @@ if __name__ == "__main__":
     # step 2
     upload_url = str(response["upload_url"])
     upload_params = response["upload_params"]
-    #files = {"file": open(results_file, "rb")}
     files = {"file": results_file}
 
-    #response = requests.post(upload_url, data=upload_params, files=files)
-    #response = post_multipart_form(upload_url, data=upload_params, files=files)
     response2, headers = post_file_using_curl(upload_url, data=upload_params, file=results_file)
     print('response 2')
     print(response2)
@@ -121,13 +119,9 @@ if __name__ == "__main__":
     print(headers)
 
     # step 3
-    #location = response.headers["Location"]
-    #location = str(response.info().getheader("Location"))
     location = get_header("Location", headers)
     print("location: %s" % location)
 
-    #final_response = requests.post(location, headers={"Authorization": "Bearer %s" % token})
-    #final_response = post_multipart_form(location, data={}, files={}, headers={"Authorization": "Bearer %s" % token})
     response3 = open_canvas_page_as_string(str(location), token, method="POST")
     print("response 3")
     print(response3)
@@ -142,7 +136,6 @@ if __name__ == "__main__":
         put_data["submission[posted_grade]"] = grade
 
     print(put_data)
-    #response4 = open_canvas_page_as_string(comment_url, token, data=put_data, method="PUT")
     response4, headers = put_using_curl(comment_url, token, data=put_data)
     print(response4)
 

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import json
 import sys
+import datetime
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -53,6 +54,76 @@ parser.add_option("-C", "--autograder-command",
                        "'points_received': <int>, "
                        "'team_login_ids': [login_id_1, login_id_2, ...]}"
                        "It may optionally contain the field 'submitter_login_id': <login_id>")
+
+
+def update_autograder_history_file(autograder_history_file, autograder_summary):
+    '''
+    Add this autograder_summary to the list of summaries in the history file
+    :param autograder_history_file: a json file containing a list of autograder summaries
+    :param autograder_summary: a dictionary containing this autograder summary
+    :return: None
+    '''
+    assert isinstance(autograder_summary, dict)
+
+    if os.path.isfile(autograder_history_file):
+        autograder_history = json.load(autograder_history_file)
+    else:
+        autograder_history = []
+
+    assert isinstance(autograder_history, list)
+
+    autograder_history.append(autograder_summary)
+
+    with open(autograder_history_file, "w") as f:
+        json.dump(autograder_history, f)
+
+
+def get_submitted_at(submission_summary_file):
+    assert os.path.isfile(submission_summary_file), "not a valid file: %s" % submission_summary_file
+
+    with open(submission_summary_file, "r") as f:
+        summary = json.load(f)
+
+    return summary["submitted_at"]
+
+
+def should_do_grading(submission_summary_file, results_file):
+    if not os.path.isfile(submission_summary_file):
+        # if there is no submission summary, must do grading
+        return True
+
+    graded_version = None
+    if not os.path.isfile(results_file):
+        # if there is no existing autograder result, must do grading
+        return True
+
+    # get Canvas time of submission
+    submitted_at = get_submitted_at(submission_summary_file)
+
+    # get Canvas time of the file that was graded
+    with open(results_file, "r") as f:
+        # get graded version (if any)
+        lines = f.readlines()
+        try:
+            summary = json.loads(lines[-1])
+        except ValueError as E:
+            # if we can't read the autograder summary, must do grading
+            return True
+
+    if "graded_version" not in summary.keys():
+        # if there is no info about the graded version, must do grading
+        return True
+
+    graded_version = summary["graded_version"]
+
+    submitted_at_time = datetime.datetime.strptime(submitted_at, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+
+    if graded_version_time >= submitted_at_time:
+        # if graded version time is later or same as submitted version time, we've already graded it
+        return False
+    else:
+        return True
 
 
 if __name__ == "__main__":
@@ -106,16 +177,27 @@ if __name__ == "__main__":
     # change directory into the temporary directory
     os.chdir(destination_directory)
 
-    # run the autograder command, piping output to autograder_results.txt
+    # check if this submission has already been graded
+    submission_summary_file = "submission.json"
     results_file = "autograder_results.txt"
-    with open(results_file, "w") as f:
-        args = autograder_command.split(" ")
-        subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
+    do_grading = should_do_grading(submission_summary_file, results_file)
 
-    # process json summary and print it out
+    if do_grading:
+        # run the autograder command, piping output to autograder_results.txt
+        with open(results_file, "w") as f:
+            args = autograder_command.split(" ")
+            subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
+    else:
+        msg = "%s: for student [%s], this submission was previously graded.  Exiting." % (__file__, login_id)
+        write_to_log(msg)
+        print(msg)
+        shutil.rmtree(temp_directory)
+        sys.exit(3)
+
+    # process autograder json summary
     lines = open(results_file, "r").readlines()
     try:
-        summary  = json.loads(lines[-1])
+        autograder_summary  = json.loads(lines[-1])
     except ValueError as E:
         msg = "%s: for student [%s], error [%s]" % (__file__, login_id, E)
         write_to_log(msg)
@@ -123,32 +205,45 @@ if __name__ == "__main__":
         shutil.rmtree(temp_directory)
         sys.exit(2)
 
-
-    if "submitter_login_id" in summary.keys():
-        submitter_login_id = str(summary["submitter_login_id"])
+    if "submitter_login_id" in autograder_summary.keys():
+        # if submitter_login_id is already there, make sure it doesn't end in "_tmp"
+        submitter_login_id = str(autograder_summary["submitter_login_id"])
         if submitter_login_id.endswith("_tmp"):
             submitter_login_id = submitter_login_id[:-4]
-            summary["submitter_login_id"] = submitter_login_id
+            autograder_summary["submitter_login_id"] = submitter_login_id
     else:
-        summary["submitter_login_id"] = login_id
+        # otherwise, use the command line option login_id as the submitter
+        autograder_summary["submitter_login_id"] = login_id
+
+    # record which submission was graded
+    submitted_at = get_submitted_at(submission_summary_file)
+    autograder_summary["graded_version"] = submitted_at
 
     clean_netids = []
-    dirty_netids = summary["team_login_ids"]
+    dirty_netids = autograder_summary["team_login_ids"]
     for netid in dirty_netids:
         if netid.endswith("_tmp"):
             netid = netid[:-4]
         clean_netids.append(netid)
 
-    summary["team_login_ids"] = clean_netids
+    autograder_summary["team_login_ids"] = clean_netids
 
-    lines[-1] = json.dumps(summary)
+    lines[-1] = json.dumps(autograder_summary)
     open(results_file,"w").writelines(lines)
+
+    # print summary
     print("Summary:")
     print(lines[-1])
 
     # copy autograder_results.txt to the student's assignment subdirectory
     shutil.copy2(results_file, assignment_directory)
 
-    # delete the temporary directory
+    # update autograder_history file and copy to student's subdirectory
+    autograder_history_file = "autograder_history.json"
+    update_autograder_history_file(autograder_history_file, autograder_summary)
+    shutil.copy2(autograder_history_file, assignment_directory)
+
+    # delete the temporary directory and exit
     shutil.rmtree(temp_directory)
+    sys.exit(0)
 

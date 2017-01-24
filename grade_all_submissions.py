@@ -67,6 +67,8 @@ if __name__ == "__main__":
     netids = os.listdir(submissions_directory)
 
     count = 0
+    no_submission_count = 0
+    already_graded = 0
     fail_count = 0
     plist = {}
     for netid in netids:
@@ -76,23 +78,34 @@ if __name__ == "__main__":
                 "-a", assignment_name,
                 "-l", netid,
                 "-C", autograder_command]
-        # success = subprocess.call(args)
-        # if success == 0:
-        #     count += 1
         p = subprocess.Popen(args)
         plist[netid] = p
 
     for netid in plist:
         p = plist[netid]
         p.wait()
-        if p.returncode == 0:
+        return_code = p.returncode
+        
+        if return_code == 0:
             count += 1
+        elif return_code == 1:
+            no_submission_count += 1
+        elif return_code == 3:
+            already_graded += 1
         else:
-            fail_count +=1
+            fail_count += 1
 
     duration = time.time() - start
 
     msg = "%d submissions graded" % count
+    write_to_log(msg)
+    print(msg)
+
+    msg = "%d directories skipped (no submission)" % no_submission_count
+    write_to_log(msg)
+    print(msg)
+
+    msg = "%d submissions skipped (previously graded)" % already_graded
     write_to_log(msg)
     print(msg)
 

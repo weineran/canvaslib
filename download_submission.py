@@ -91,14 +91,7 @@ if __name__ == "__main__":
     user_id = options.user_id
     netid, user_id = get_netid_and_user_id(netid, user_id, roster_file)
 
-    # download assignment info
-    url = build_canvas_url(["courses", course_id, "assignments", assignment_id], params={})
-    assignment_response = open_canvas_page_as_string(url, token)
-    assignment_response = json.loads(assignment_response)
-    assignment_summary_path = os.path.join(download_directory, "assignment.json")
-    with open(assignment_summary_path, "w") as f:
-        json.dump(assignment_response, f)
-
+    # download submission info
     url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], params={})
     response = open_canvas_page_as_string(url, token)
     response = json.loads(response)
@@ -118,8 +111,8 @@ if __name__ == "__main__":
 
             if not (remote_submitted_at > local_submitted_at):
                 # if the submission is not newer than the one we already have, skip it
-                msg = "%s: remote submission [%s] not newer than local submission [%s]. Exiting." % \
-                      (__file__, submission_summary["submitted_at"], response["submitted_at"])
+                msg = "%s: remote submission [%s] not newer than local submission [%s] for netid [%s]. Exiting." % \
+                      (__file__, submission_summary["submitted_at"], response["submitted_at"], netid)
                 print(msg)
                 write_to_log(msg)
                 sys.exit(1)
@@ -139,6 +132,14 @@ if __name__ == "__main__":
         sys.exit(3)
 
     # if we get this far, we're doing the download
+    # First, download assignment info
+    url = build_canvas_url(["courses", course_id, "assignments", assignment_id], params={})
+    assignment_response = open_canvas_page_as_string(url, token)
+    assignment_response = json.loads(assignment_response)
+    assignment_summary_path = os.path.join(download_directory, "assignment.json")
+    with open(assignment_summary_path, "w") as f:
+        json.dump(assignment_response, f)
+
     file_url = attachments[0]["url"]
     if not os.path.isdir(download_directory):
         os.mkdir(download_directory, 0755)

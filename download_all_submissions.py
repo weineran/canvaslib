@@ -3,6 +3,7 @@ import os
 import subprocess
 from utils import get_token, download_all_objects_to_list, get_assignment_name_and_id, get_netid_from_user_id, \
                   build_canvas_url, make_new_directory, write_to_log
+import sys
 
 
 parser = OptionParser(usage="Usage: %prog [options]",
@@ -37,6 +38,9 @@ parser.add_option("-L", "--assignment_list",
 parser.add_option("-t", "--token-json-file",
                   dest="token_json_file", default=os.path.join("resources","token.json"), type=str,
                   help="The path to a .json file containing the Canvas authorization token.")
+parser.add_option("-v", "--verbose",
+                  dest="verbose", default="False", type=str,
+                  help="If 'True', print verbose output.  Default is 'False'.")
 
 
 def get_or_make_directory(parent_directory, subdirectory):
@@ -62,6 +66,15 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     download_filename = options.download_filename
+
+    verbose = options.verbose
+    if verbose.lower() == "true":
+        verbose = True
+    elif verbose.lower() == "false":
+        verbose = False
+    else:
+        print("verbose must be 'True' or 'False': %s" % verbose)
+        sys.exit(1)
 
     course_id = options.course_id
     assert isinstance(course_id, int), "course_id is not an int: %s" % course_id
@@ -93,6 +106,7 @@ if __name__ == "__main__":
 
     plist = {}
     count = 0
+    weird_skips = 0
     for submission in submissions:
         user_id = submission["user_id"]
         netid = get_netid_from_user_id(user_id, roster_file)
@@ -101,6 +115,17 @@ if __name__ == "__main__":
             msg = "%s: skipping netid [%s] user_id [%s]" % (__file__, netid, user_id)
             print(msg)
             write_to_log(msg)
+            weird_skips += 1
+            continue
+
+        # if there are no attempted submissions, then there is nothing to download
+        # (note that the submission might have an 'id' assigned if we have already uploaded a grade for this student,
+        #  e.g. if their partner submitted the assignment)
+        if submission["attempt"] == None:
+            if verbose:
+                msg = "%s: No submission for netid [%s] user_id [%s].  Skipping." % (__file__, netid, user_id)
+                print(msg)
+                write_to_log(msg)
             continue
 
         netid_directory = get_or_make_directory(parent_directory, netid)
@@ -132,6 +157,10 @@ if __name__ == "__main__":
             count += 1
 
     msg = "%d submissions downloaded" % count
+    print(msg)
+    write_to_log(msg)
+
+    msg = "%d weird skips (see canvaslib.log)" % weird_skips
     print(msg)
     write_to_log(msg)
 

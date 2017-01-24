@@ -16,3 +16,7 @@ For more info:</br>
 Downloads all students' submissions for a given assignment from Canvas.</br>
 For more info:</br>
 <code>$ download_all_submissions.py -h</code>
+
+## Appendix
+### Other Canvas projects worth checking out
+* https://github.com/hawesie/python-canvas-api
