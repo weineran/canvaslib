@@ -7,7 +7,6 @@ import json
 import sys
 import datetime
 
-
 parser = OptionParser(usage="Usage: %prog [options]",
                       description="Grade a single submission.  Not all arguments are required.                "
                                   "For example, try:                                                             "
@@ -45,6 +44,15 @@ parser.add_option("-L", "--assignment_list",
                   type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
                        "'assignment_name' and 'assignment_id'.")
+parser.add_option("-m",
+                  dest="make_assignment_directory", action="store_true", default=False,
+                  help="If the assignment directory doesn't exist, should it be created?")
+parser.add_option("-f",
+                  dest="force_do_grading", action="store_true", default=False,
+                  help="Do grading even if submission appears to already have been graded.")
+parser.add_option("-c", "--course-id",
+                  dest="course_id", default=None, type=int,
+                  help="The Canvas course_id.  e.g. 43589.")
 parser.add_option("-C", "--autograder-command",
                   dest="autograder_command", default=None, type=str,
                   help="A command which, when run from within the student's assignment subdirectory, would "
@@ -59,14 +67,15 @@ parser.add_option("-C", "--autograder-command",
 def update_autograder_history_file(autograder_history_file, autograder_summary):
     '''
     Add this autograder_summary to the list of summaries in the history file
-    :param autograder_history_file: a json file containing a list of autograder summaries
+    :param autograder_history_file: filename of a json file containing a list of autograder summaries
     :param autograder_summary: a dictionary containing this autograder summary
     :return: None
     '''
     assert isinstance(autograder_summary, dict)
 
     if os.path.isfile(autograder_history_file):
-        autograder_history = json.load(autograder_history_file)
+        with open(autograder_history_file, "r") as f:
+            autograder_history = json.load(f)
     else:
         autograder_history = []
 
@@ -90,12 +99,12 @@ def get_submitted_at(submission_summary_file):
 def should_do_grading(submission_summary_file, results_file):
     if not os.path.isfile(submission_summary_file):
         # if there is no submission summary, must do grading
-        return True
+        return True, None, None
 
     graded_version = None
     if not os.path.isfile(results_file):
         # if there is no existing autograder result, must do grading
-        return True
+        return True, None, None
 
     # get Canvas time of submission
     submitted_at = get_submitted_at(submission_summary_file)
@@ -108,22 +117,25 @@ def should_do_grading(submission_summary_file, results_file):
             summary = json.loads(lines[-1])
         except ValueError as E:
             # if we can't read the autograder summary, must do grading
-            return True
+            return True, None, None
 
     if "graded_version" not in summary.keys():
         # if there is no info about the graded version, must do grading
-        return True
+        return True, None, None
 
     graded_version = summary["graded_version"]
 
-    submitted_at_time = datetime.datetime.strptime(submitted_at, "%Y-%m-%dT%H:%M:%SZ").timetuple()
-    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+    if graded_version == "N/A":
+        return True, None, None
+
+    submitted_at_time = datetime.datetime.strptime(submitted_at, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
+    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
 
     if graded_version_time >= submitted_at_time:
         # if graded version time is later or same as submitted version time, we've already graded it
-        return False
+        return False, graded_version, submitted_at
     else:
-        return True
+        return True, graded_version, submitted_at
 
 
 if __name__ == "__main__":
@@ -134,14 +146,15 @@ if __name__ == "__main__":
 
     submissions_directory = options.submissions_directory
     assert isinstance(submissions_directory, str), "submissions_directory not provided? [%s]" % submissions_directory
-    assert os.path.isdir(submissions_directory), "submissions_directory is not a valid directory: %s" % submissions_directory
+    assert os.path.isdir(
+        submissions_directory), "submissions_directory is not a valid directory: %s" % submissions_directory
 
     assignment_name = options.assignment_name
     assignment_id = options.assignment_id
     assert isinstance(assignment_name, str) or isinstance(assignment_id, int), \
-            "A valid assignment_name or assignment_id must be provided.\n" \
-            "assignment_name: [%s]\n" \
-            "assignment_id: [%s]" % (assignment_name, assignment_id)
+        "A valid assignment_name or assignment_id must be provided.\n" \
+        "assignment_name: [%s]\n" \
+        "assignment_id: [%s]" % (assignment_name, assignment_id)
 
     user_id = options.user_id
     login_id = options.login_id
@@ -156,14 +169,36 @@ if __name__ == "__main__":
     assignment_list = options.assignment_list
     assert os.path.isfile(assignment_list), "assignment_list is not a valid file: %s" % assignment_list
 
-    assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
+    course_id = options.course_id  # this arg is optional
+
+    assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list,
+                                                                course_id)
     login_id, user_id = get_netid_and_user_id(login_id, user_id, roster_file)
 
     assignment_directory = os.path.join(submissions_directory, login_id, assignment_name)
 
+    make_assignment_directory = options.make_assignment_directory
+    assert isinstance(make_assignment_directory,
+                      bool), "-m flag did not give valid bool: %s" % make_assignment_directory
+
+    force_do_grading = options.force_do_grading
+    assert isinstance(force_do_grading,
+                      bool), "-f flag did not give valid bool: %s" % force_do_grading
+
     if not os.path.isdir(assignment_directory):
-        print("Directory does not exist: %s" % assignment_directory)
-        sys.exit(1)
+        msg = "%s: Directory does not exist: %s" % (__file__, assignment_directory)
+
+        if not make_assignment_directory:
+            msg += ". Exiting.  (If you wish to automatically create the necessary directories, re-run " \
+                   "with the '-m true' option."
+            print(msg)
+            write_to_log(msg)
+            sys.exit(1)
+        else:
+            msg += ". Creating directory."
+            print(msg)
+            write_to_log(msg)
+            os.mkdir(assignment_directory, 0755)
 
     # make a temporary directory in the submissions directory (to be safe, make it the same depth as actual assignment
     # subdirectory
@@ -180,15 +215,36 @@ if __name__ == "__main__":
     # check if this submission has already been graded
     submission_summary_file = "submission.json"
     results_file = "autograder_results.txt"
-    do_grading = should_do_grading(submission_summary_file, results_file)
+    do_grading, graded_version, submitted_at = should_do_grading(submission_summary_file, results_file)
 
-    if do_grading:
+    if do_grading or force_do_grading:
         # run the autograder command, piping output to autograder_results.txt
         with open(results_file, "w") as f:
             args = autograder_command.split(" ")
-            subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
+
+            # change '~' to $HOME
+            HOME = os.environ["HOME"]
+            for i in range(0, len(args)):
+                if args[i].startswith('~'):
+                    args[i] = args[i].replace('~', HOME, 1)
+
+            if force_do_grading:
+                args.append("-f")
+
+            returncode = subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
+
+        if returncode != 0:
+            msg = "%s: command failed [%s] with exit code [%d] for student [%s].  Exiting." % (
+            __file__, " ".join(args), returncode, login_id)
+            write_to_log(msg)
+            print(msg)
+            shutil.copy2(results_file, assignment_directory)
+            shutil.rmtree(temp_directory, ignore_errors=True)
+            sys.exit(returncode)
+
     else:
-        msg = "%s: for student [%s], this submission was previously graded.  Exiting." % (__file__, login_id)
+        msg = "%s: for student [%s], this submission [%s] was previously graded at [%s].  Exiting." % (
+        __file__, login_id, submitted_at, graded_version)
         write_to_log(msg)
         print(msg)
         shutil.rmtree(temp_directory)
@@ -197,11 +253,12 @@ if __name__ == "__main__":
     # process autograder json summary
     lines = open(results_file, "r").readlines()
     try:
-        autograder_summary  = json.loads(lines[-1])
+        autograder_summary = json.loads(lines[-1])
     except ValueError as E:
         msg = "%s: for student [%s], error [%s]" % (__file__, login_id, E)
         write_to_log(msg)
         print(msg)
+        shutil.copy2(results_file, assignment_directory)
         shutil.rmtree(temp_directory)
         sys.exit(2)
 
@@ -229,7 +286,7 @@ if __name__ == "__main__":
     autograder_summary["team_login_ids"] = clean_netids
 
     lines[-1] = json.dumps(autograder_summary)
-    open(results_file,"w").writelines(lines)
+    open(results_file, "w").writelines(lines)
 
     # print summary
     print("Summary:")
@@ -237,6 +294,7 @@ if __name__ == "__main__":
 
     # copy autograder_results.txt to the student's assignment subdirectory
     shutil.copy2(results_file, assignment_directory)
+    shutil.copy2(submission_summary_file, assignment_directory)
 
     # update autograder_history file and copy to student's subdirectory
     autograder_history_file = "autograder_history.json"
@@ -246,4 +304,3 @@ if __name__ == "__main__":
     # delete the temporary directory and exit
     shutil.rmtree(temp_directory)
     sys.exit(0)
-
