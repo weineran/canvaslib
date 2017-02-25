@@ -19,12 +19,21 @@ def exit_setup():
 
 
 def download_roster(course_id):
+    assert isinstance(course_id, int), "course_id [%s] must be a valid number.  Try re-running the script and providing " \
+                                       "a valid course_id using the '-c' command line option." % course_id
+
+    # TODO use full path relative to this file
     p = subprocess.Popen(["python", "download_roster.py",
                           "-c", str(course_id)])
     p.wait()
 
 
 def download_assignments(course_id):
+    assert isinstance(course_id,
+                      int), "course_id [%s] must be a valid number.  Try re-running the script and providing " \
+                            "a valid course_id using the '-c' command line option." % course_id
+
+    # TODO use full path relative to this file
     p = subprocess.Popen(["python", "download_assignments.py",
                           "-c", str(course_id)])
     p.wait()
