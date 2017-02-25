@@ -28,6 +28,12 @@ parser.add_option("-L", "--assignment_list",
                   type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
                        "'assignment_name' and 'assignment_id'.")
+parser.add_option("-m",
+                  dest="make_assignment_directory", action="store_true", default=False,
+                  help="If the assignment directory doesn't exist, should it be created?")
+parser.add_option("-f",
+                  dest="force_do_grading", action="store_true", default=False,
+                  help="Do grading even if submission appears to already have been graded.")
 parser.add_option("-C", "--autograder-command",
                   dest="autograder_command", default=None, type=str,
                   help="A command which, when run from within the student's assignment subdirectory, would "
@@ -64,6 +70,12 @@ if __name__ == "__main__":
 
     assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
 
+    make_assignment_directory = options.make_assignment_directory
+    assert isinstance(make_assignment_directory, bool), "-m flag gave invalid value: %s" % make_assignment_directory
+
+    force_do_grading = options.force_do_grading
+    assert isinstance(force_do_grading, bool), "-f flag gave invalid value: %s" % force_do_grading
+
     netids = os.listdir(submissions_directory)
 
     count = 0
@@ -73,12 +85,19 @@ if __name__ == "__main__":
     plist = {}
     for netid in netids:
         print("Attempting to grade submissions for: %s" % netid)
-        args = ["python", "grade_submission.py",
+        arguments = ["python", "grade_submission.py",
                 "-d", submissions_directory,
                 "-a", assignment_name,
                 "-l", netid,
                 "-C", autograder_command]
-        p = subprocess.Popen(args)
+
+        if make_assignment_directory:
+            arguments.append("-m")
+
+        if force_do_grading:
+            arguments.append("-f")
+
+        p = subprocess.Popen(arguments)
         plist[netid] = p
 
     for netid in plist:
