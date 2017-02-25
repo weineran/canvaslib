@@ -65,65 +65,63 @@ def get_filename(assignment_name, netid):
 
 
 if __name__ == "__main__":
+
+    # Get command line options
     (options, args) = parser.parse_args()
 
     # for token generation, see https://canvas.instructure.com/doc/api/file.oauth.html#manual-token-generation
-    script_dir = os.path.dirname(os.path.realpath(__file__))
     token_json_file = options.token_json_file
     token = get_token(token_json_file)
 
-    # e.g. course_id = "43589"
-    course_id = options.course_id
+    course_id = options.course_id    # e.g. course_id = "43589"
     assert isinstance(course_id, int)
 
     roster_file = options.roster
     assignment_list = options.assignment_list
 
-    # e.g. assignment_id = "280047"
     assignment_name = options.assignment_name
-    assignment_id = options.assignment_id
+    assignment_id = options.assignment_id    # e.g. assignment_id = "280047"
     assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list)
 
     download_directory = options.download_directory
 
-    # e.g. user_id = "44648"
     netid = options.netid
-    user_id = options.user_id
+    user_id = options.user_id    # e.g. user_id = "44648"
     netid, user_id = get_netid_and_user_id(netid, user_id, roster_file)
 
     # download submission info
     url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], params={})
     response = open_canvas_page_as_string(url, token)
-    response = json.loads(response)
+    remote_submission_summary = json.loads(response)
 
     # only download new submissions
     submission_summary_file = "submission.json"
-    submission_summary_path = os.path.join(download_directory, submission_summary_file)
+    local_submission_summary_path = os.path.join(download_directory, submission_summary_file)
     if os.path.isfile(os.path.join(download_directory, submission_summary_file)):
-        submission_summary = {}
-        with open(submission_summary_path, "r") as f:
-            submission_summary = json.load(f)
+        local_submission_summary = {}
+        with open(local_submission_summary_path, "r") as f:
+            local_submission_summary = json.load(f)
 
-        local_submitted_at = datetime.datetime.strptime(submission_summary["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
+        local_submitted_at = datetime.datetime.strptime(local_submission_summary["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
 
-        if response["submitted_at"] != "null":
-            remote_submitted_at = datetime.datetime.strptime(response["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
+        if remote_submission_summary["submitted_at"] != "null":
+            remote_submitted_at = datetime.datetime.strptime(remote_submission_summary["submitted_at"], "%Y-%m-%dT%H:%M:%SZ").timetuple()
 
             if not (remote_submitted_at > local_submitted_at):
                 # if the submission is not newer than the one we already have, skip it
                 msg = "%s: remote submission [%s] not newer than local submission [%s] for netid [%s]. Exiting." % \
-                      (__file__, submission_summary["submitted_at"], response["submitted_at"], netid)
+                      (__file__, remote_submission_summary["submitted_at"], local_submission_summary["submitted_at"], netid)
                 print(msg)
                 write_to_log(msg)
                 sys.exit(1)
 
-    if "attachments" not in response:
+    if "attachments" not in remote_submission_summary:
         msg = "%s: No attachments submitted for netid [%s] user_id [%s]. Exiting." % (__file__, netid, user_id)
         print(msg)
         write_to_log(msg)
         sys.exit(2)
 
-    attachments = response["attachments"]
+    attachments = remote_submission_summary["attachments"]
 
     if len(attachments) != 1:
         msg = "%s: Expected 1 attachment, got [%s]. Exiting." % (__file__, len(attachments))
@@ -164,10 +162,10 @@ if __name__ == "__main__":
     else:
         submissions_history = []
 
-    submissions_history.append(response)
+    submissions_history.append(remote_submission_summary)
     with open(submissions_history_path, "w") as f:
         json.dump(submissions_history, f)
 
-    with open(submission_summary_path, "w") as f:
-        json.dump(response, f)
+    with open(local_submission_summary_path, "w") as f:
+        json.dump(remote_submission_summary, f)
 
