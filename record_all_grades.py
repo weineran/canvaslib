@@ -33,19 +33,24 @@ parser.add_option("-L", "--assignment_list",
                   type=str,
                   help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
                        "'assignment_name' and 'assignment_id'.")
-parser.add_option("-U", "--upload-results",
-                  dest="upload_results", default="False", type=str,
-                  help="If True, uploads comment attachment to Canvas containing autograder_results.  Also uploads score.")
+parser.add_option("-U",
+                  dest="upload_results", default=False, action="store_true",
+                  help="If this flag is present, script uploads comment attachment to Canvas containing "
+                       "autograder_results.  Also uploads score.")
 parser.add_option("-c", "--course-id",
                   dest="course_id", default=None, type=int,
                   help="The Canvas course_id.  e.g. 43589.  Only required when uploading results.")
 
 
-def record_uploaded_version(autograder_summary, student):
+netid_to_upload_time = {}
+
+
+def record_uploaded_version(autograder_summary, student, autograder_results):
     '''
-    Update the autograder_summary so that uploaded_version matches graded_version
+    Update the autograder_summary so that uploaded_version matches graded_version and save to autograder_results file
     :param autograder_summary: dictionary containing the autograder summary
     :param student: login_id (netid) of student
+    :param autograder_results: path to file containing autograder results
     :return: None
     '''
     assert isinstance(autograder_summary, dict)
@@ -55,6 +60,17 @@ def record_uploaded_version(autograder_summary, student):
         autograder_summary["uploaded_version"] = {}
 
     autograder_summary["uploaded_version"][student] = autograder_summary["graded_version"]
+
+    # replace autograder_summary at end of autograder_results file
+    with open(autograder_results, "r") as f:
+        lines = f.readlines()
+
+    lines[-1] = json.dumps(autograder_summary)
+
+    with open(autograder_results, "w") as f:
+        f.writelines(lines)
+
+    netid_to_upload_time[student] = autograder_summary["uploaded_version"][student]
 
 
 def check_grade_is_new(autograder_summary, student):
@@ -67,7 +83,9 @@ def check_grade_is_new(autograder_summary, student):
     assert isinstance(autograder_summary, dict)
     assert isinstance(student, str), "student is not a string: %s" % student
 
-    if "uploaded_version" in autograder_summary.keys():
+    if student in netid_to_upload_time:
+        uploaded_version_student = netid_to_upload_time[student]
+    elif "uploaded_version" in autograder_summary.keys():
         # get uploaded version time of this student
         uploaded_version = autograder_summary["uploaded_version"]
         assert isinstance(uploaded_version, dict)
@@ -84,6 +102,9 @@ def check_grade_is_new(autograder_summary, student):
         graded_version = autograder_summary["graded_version"]
     else:
         # assume the submission has not yet been graded, so don't upload anything
+        return False
+
+    if uploaded_version_student == graded_version:
         return False
 
     uploaded_version_student_time = datetime.datetime.strptime(uploaded_version_student, "%Y-%m-%dT%H:%M:%SZ").timetuple()
@@ -121,14 +142,10 @@ if __name__ == "__main__":
     course_id = options.course_id
 
     upload_results = options.upload_results
-    if upload_results.lower() == "false":
-        upload_results = False
-    elif upload_results.lower() == "true":
-        upload_results = True
+    assert isinstance(upload_results, bool), "-U flag did not make valid bool: %s" % upload_results
+    if upload_results:
         assert isinstance(course_id, int), "course_id must be a valid int when uploading results: %s" % course_id
-    else:
-        print("upload_results must be 'true' or 'false': %s" % upload_results)
-        sys.exit(1)
+
 
     netids = os.listdir(submissions_directory)
 
@@ -159,16 +176,16 @@ if __name__ == "__main__":
         try:
             autograder_summary = json.loads(last_line)
         except ValueError as E:
-            msg = "%s: Unable to load summary [%s]" % (__file__, E)
+            msg = "%s: Unable to load summary [%s] for student [%s]" % (__file__, E, netid)
             write_to_log(msg)
             print(msg)
             continue
         else:
             assert isinstance(autograder_summary , dict)
 
-        team_netids = autograder_summary ["team_login_ids"]
-        points_received = autograder_summary ["points_received"]
-        points_possible = autograder_summary ["points_possible"]
+        team_netids = autograder_summary["team_login_ids"]
+        points_received = autograder_summary["points_received"]
+        points_possible = autograder_summary["points_possible"]
         percent = float(points_received) / float(points_possible) * 100
         percent_as_string = "{0:0.1f}%".format(percent)
 
@@ -177,10 +194,13 @@ if __name__ == "__main__":
 
         # inner loop to handle each individual student
         for student in team_netids:
-            can_do_upload = check_grade_is_new(autograder_summary, str(student))
+            student = str(student)
+            this_autograder_summary = copy.deepcopy(autograder_summary)
+            this_autograder_summary["student"] = student
 
-            autograder_summary.update({"student": student})
-            grades.append(copy.deepcopy(autograder_summary ))
+            can_do_upload = check_grade_is_new(this_autograder_summary, student)
+
+            grades.append(copy.deepcopy(this_autograder_summary))
 
             if upload_results == True:
                 if can_do_upload:
@@ -194,7 +214,7 @@ if __name__ == "__main__":
 
                     if return_code == 0:
                         count += 1
-                        record_uploaded_version(autograder_summary, student)
+                        record_uploaded_version(this_autograder_summary, student, autograder_results)
                     else:
                         fail_count += 1
                 else:
