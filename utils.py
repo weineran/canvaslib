@@ -5,9 +5,52 @@ import csv
 from setup import download_assignments
 import urllib2_extension
 import subprocess
+import sys
+from optparse import OptionParser
 
 
 log_filename = "canvaslib.log"
+
+
+def get_optparse_args(parser):
+    assert isinstance(parser, OptionParser), "parser is not an OptionParser: %s" % parser
+
+    (options, args) = parser.parse_args()
+    default = None
+
+    submissions_directory = getattr(options, "submissions_directory", default)
+    assert isinstance(submissions_directory, str), "submissions_directory not provided? [%s]" % submissions_directory
+    assert os.path.isdir(
+        submissions_directory), "submissions_directory is not a valid directory: %s" % submissions_directory
+
+    assignment_name = getattr(options, "assignment_name", default)
+    assignment_id = getattr(options, "assignment_id", default)
+    assert isinstance(assignment_name, str) or isinstance(assignment_id, int), \
+        "A valid assignment_name or assignment_id must be provided.\n" \
+        "assignment_name: [%s]\n" \
+        "assignment_id: [%s]" % (assignment_name, assignment_id)
+
+    user_id = getattr(options, "user_id", default)
+    login_id = getattr(options, "login_id", default)
+    assert isinstance(login_id, str) or isinstance(user_id, int), \
+        "A valid login_id or user_id must be provided.\n" \
+        "login_id: [%s]\n" \
+        "user_id: [%s]" % (login_id, user_id)
+
+    roster_file = getattr(options, "roster_file", default)
+    #assert os.path.isfile(roster_file), "roster_file is not a valid file: %s" % roster_file
+
+    assignment_list = getattr(options, "assignment_list", default)
+    assert os.path.isfile(assignment_list), "assignment_list is not a valid file: %s" % assignment_list
+
+    course_id = getattr(options, "course_id", default)
+
+    assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list,
+                                                                course_id)
+    #login_id, user_id = get_netid_and_user_id(login_id, user_id, roster_file)
+
+    return options, args, submissions_directory, assignment_name, assignment_id, user_id, login_id, roster_file, \
+           assignment_list, course_id
 
 
 def write_to_log(message):
@@ -188,7 +231,11 @@ def open_canvas_page(url, token, data=None, method=None):
     if data:
         request.add_data(urllib.urlencode(data))
 
-    page = urllib2.urlopen(request)
+    try:
+        page = urllib2.urlopen(request)
+    except urllib2.HTTPError as e:
+        print(e)
+        sys.exit(1)
 
     return page
 
