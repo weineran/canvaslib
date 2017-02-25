@@ -235,6 +235,7 @@ def open_canvas_page(url, token, data=None, method=None):
         page = urllib2.urlopen(request)
     except urllib2.HTTPError as e:
         print(e)
+        write_to_log(e)
         sys.exit(1)
 
     return page
