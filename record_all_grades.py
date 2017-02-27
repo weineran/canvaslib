@@ -41,6 +41,10 @@ parser.add_option("-c", "--course-id",
                   dest="course_id", default=None, type=int,
                   help="The Canvas course_id.  e.g. 43589.  Only required when uploading results.")
 
+RETURNCODE_SUCCESS = 0
+RETURNCODE_ALREADY_UPLOADED = 1
+RETURNCODE_FAILED = 4
+
 
 netid_to_upload_time = {}
 
@@ -107,8 +111,8 @@ def check_grade_is_new(autograder_summary, student):
     if uploaded_version_student == graded_version:
         return False
 
-    uploaded_version_student_time = datetime.datetime.strptime(uploaded_version_student, "%Y-%m-%dT%H:%M:%SZ").timetuple()
-    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%SZ").timetuple()
+    uploaded_version_student_time = datetime.datetime.strptime(uploaded_version_student, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
+    graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
 
     if uploaded_version_student_time >= graded_version_time:
         # if the uploaded version is more recent or the same as the graded version, do not re-upload
@@ -149,9 +153,11 @@ if __name__ == "__main__":
 
     netids = os.listdir(submissions_directory)
 
-    count = 0
-    fail_count = 0
+    success_count = 0
+    fail_list = []
+    unknown_list = []
     grades = []
+    already_uploaded_count = 0
     for netid in netids:
         assignment_directory = os.path.join(submissions_directory, netid, assignment_name)
 
@@ -212,12 +218,15 @@ if __name__ == "__main__":
                             "-l", student]
                     return_code = subprocess.call(args)
 
-                    if return_code == 0:
-                        count += 1
+                    if return_code == RETURNCODE_SUCCESS:
+                        success_count += 1
                         record_uploaded_version(this_autograder_summary, student, autograder_results)
+                    elif return_code == RETURNCODE_FAILED:
+                        fail_list.append(student)
                     else:
-                        fail_count += 1
+                        unknown_list.append(student)
                 else:
+                    already_uploaded_count += 1
                     msg = "%s: Grade is not new for netid [%s].  Skipping upload." % (__file__, student)
                     write_to_log(msg)
                     print(msg)
@@ -235,13 +244,22 @@ if __name__ == "__main__":
 
     duration = time.time() - start
 
-    msg = "%d grades uploaded successfully" % count
+    msg = "%d grades uploaded successfully" % success_count
     write_to_log(msg)
     print(msg)
 
-    msg = "%d grades failed to upload" % fail_count
+    msg = "%d grades skipped (already uploaded)" % already_uploaded_count
     write_to_log(msg)
     print(msg)
+
+    msg = "%d grades failed to upload: %s" % (len(fail_list), fail_list)
+    write_to_log(msg)
+    print(msg)
+
+    if len(unknown_list) > 0:
+        msg = "%d grades had UNKNOWN problem: %s" % (len(unknown_list), unknown_list)
+        write_to_log(msg)
+        print(msg)
 
     msg = "%d seconds elapsed" % duration
     write_to_log(msg)

@@ -45,6 +45,13 @@ parser.add_option("-C", "--autograder-command",
                        "It may optionally contain the field 'submitter_login_id': <login_id>")
 
 
+RETURNCODE_SUCCESS = 0
+RETURNCODE_NO_SUBMISSION = 1
+RETURNCODE_OTHER = 2
+RETURNCODE_ALREADY_GRADED = 3
+RETURNCODE_FAILED = 4
+
+
 if __name__ == "__main__":
     start = time.time()
 
@@ -80,8 +87,10 @@ if __name__ == "__main__":
 
     count = 0
     no_submission_count = 0
+    other_list = []
     already_graded = 0
-    fail_count = 0
+    fail_list = []
+    unknown_list = []
     plist = {}
     for netid in netids:
         print("Attempting to grade submissions for: %s" % netid)
@@ -105,14 +114,18 @@ if __name__ == "__main__":
         p.wait()
         return_code = p.returncode
         
-        if return_code == 0:
+        if return_code == RETURNCODE_SUCCESS:
             count += 1
-        elif return_code == 1:
+        elif return_code == RETURNCODE_NO_SUBMISSION:
             no_submission_count += 1
-        elif return_code == 3:
+        elif return_code == RETURNCODE_OTHER:
+            other_list.append(netid)
+        elif return_code == RETURNCODE_ALREADY_GRADED:
             already_graded += 1
+        elif return_code == RETURNCODE_FAILED:
+            fail_list.append(netid)
         else:
-            fail_count += 1
+            unknown_list.append(netid)
 
     duration = time.time() - start
 
@@ -128,9 +141,18 @@ if __name__ == "__main__":
     write_to_log(msg)
     print(msg)
 
-    msg = "%d submissions failed to grade" % fail_count
+    msg = "%d submissions failed to grade: %s" % (len(fail_list), fail_list)
     write_to_log(msg)
     print(msg)
+
+    msg = "%d submissions had other problem: %s" % (len(other_list), other_list)
+    write_to_log(msg)
+    print(msg)
+
+    if len(unknown_list) > 0:
+        msg = "%d submissions had UNKNOWN problem: %s" % (len(unknown_list), unknown_list)
+        write_to_log(msg)
+        print(msg)
 
     msg = "%d seconds elapsed" % duration
     write_to_log(msg)

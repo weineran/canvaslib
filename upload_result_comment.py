@@ -52,6 +52,10 @@ parser.add_option("-t", "--token-json-file",
                   dest="token_json_file", default=os.path.join("resources","token.json"), type=str,
                   help="The path to a .json file containing the Canvas authorization token.")
 
+RETURNCODE_SUCCESS = 0
+RETURNCODE_ALREADY_UPLOADED = 1
+RETURNCODE_FAILED = 4
+
 
 if __name__ == "__main__":
     (options, args) = parser.parse_args()
@@ -145,4 +149,4 @@ if __name__ == "__main__":
         msg = "%s: final PUT request received non-json response [%s]" % (__file__, E)
         write_to_log(msg)
         print(msg)
-        sys.exit(1)
+        sys.exit(RETURNCODE_FAILED)

@@ -63,6 +63,12 @@ parser.add_option("-C", "--autograder-command",
                        "'team_login_ids': [login_id_1, login_id_2, ...]}"
                        "It may optionally contain the field 'submitter_login_id': <login_id>")
 
+RETURNCODE_SUCCESS = 0
+RETURNCODE_NO_SUBMISSION = 1
+RETURNCODE_OTHER = 2
+RETURNCODE_ALREADY_GRADED = 3
+RETURNCODE_FAILED = 4
+
 
 def update_autograder_history_file(autograder_history_file, autograder_summary):
     '''
@@ -101,7 +107,6 @@ def should_do_grading(submission_summary_file, results_file):
         # if there is no submission summary, must do grading
         return True, None, None
 
-    graded_version = None
     if not os.path.isfile(results_file):
         # if there is no existing autograder result, must do grading
         return True, None, None
@@ -115,7 +120,7 @@ def should_do_grading(submission_summary_file, results_file):
         lines = f.readlines()
         try:
             summary = json.loads(lines[-1])
-        except ValueError as E:
+        except (ValueError, IndexError) as E:
             # if we can't read the autograder summary, must do grading
             return True, None, None
 
@@ -193,7 +198,7 @@ if __name__ == "__main__":
                    "with the '-m true' option."
             print(msg)
             write_to_log(msg)
-            sys.exit(1)
+            sys.exit(RETURNCODE_NO_SUBMISSION)
         else:
             msg += ". Creating directory."
             print(msg)
@@ -203,6 +208,9 @@ if __name__ == "__main__":
     # make a temporary directory in the submissions directory (to be safe, make it the same depth as actual assignment
     # subdirectory
     temp_directory = os.path.join(submissions_directory, login_id + "_tmp")
+    if os.path.isdir(temp_directory):
+        msg = "%s: Directory [%s] already exists.  Exiting with code [%d]" % (
+        __file__, temp_directory, RETURNCODE_FAILED)
     os.mkdir(temp_directory, 0755)
 
     # copy the student's submission to the temporary directory
@@ -235,7 +243,7 @@ if __name__ == "__main__":
 
         if returncode != 0:
             msg = "%s: command failed [%s] with exit code [%d] for student [%s].  Exiting." % (
-            __file__, " ".join(args), returncode, login_id)
+                __file__, " ".join(args), returncode, login_id)
             write_to_log(msg)
             print(msg)
             shutil.copy2(results_file, assignment_directory)
@@ -244,11 +252,11 @@ if __name__ == "__main__":
 
     else:
         msg = "%s: for student [%s], this submission [%s] was previously graded at [%s].  Exiting." % (
-        __file__, login_id, submitted_at, graded_version)
+            __file__, login_id, submitted_at, graded_version)
         write_to_log(msg)
         print(msg)
         shutil.rmtree(temp_directory)
-        sys.exit(3)
+        sys.exit(RETURNCODE_ALREADY_GRADED)
 
     # process autograder json summary
     lines = open(results_file, "r").readlines()
@@ -260,7 +268,7 @@ if __name__ == "__main__":
         print(msg)
         shutil.copy2(results_file, assignment_directory)
         shutil.rmtree(temp_directory)
-        sys.exit(2)
+        sys.exit(RETURNCODE_OTHER)
 
     if "submitter_login_id" in autograder_summary.keys():
         # if submitter_login_id is already there, make sure it doesn't end in "_tmp"
@@ -303,4 +311,4 @@ if __name__ == "__main__":
 
     # delete the temporary directory and exit
     shutil.rmtree(temp_directory)
-    sys.exit(0)
+    sys.exit(RETURNCODE_SUCCESS)
