@@ -236,7 +236,7 @@ if __name__ == "__main__":
                 if args[i].startswith('~'):
                     args[i] = args[i].replace('~', HOME, 1)
 
-            if force_do_grading:
+            if force_do_grading and "-f" not in args:
                 args.append("-f")
 
             returncode = subprocess.call(args, stdout=f, stderr=subprocess.STDOUT)
