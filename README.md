@@ -4,7 +4,7 @@ A Python library for interacting with Canvas LMS via APIs
 ## Setup
 After cloning this repo, run `python setup.py` and follow the instructions.  This will involve manually generating a Canvas authentication token.
 
-When complete, your token will be saved to a file in your project directory.
+When complete, your token will be saved to a file in your project directory.  Make sure you keep your token private!  A good start is to change permissions on your `token.json` file to `600`.
 
 ## Scripts
 * `download_submission.py`</br>
