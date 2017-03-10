@@ -27,20 +27,12 @@ parser.add_option("-o", "--download-filename",
                   dest="download_filename", default=None, type=str,
                   help="The name to give the downloaded files.  If omitted, the name of each student's uploaded file "
                        "will be used.")
-parser.add_option("-r", "--roster",
-                  dest="roster", default=os.path.join("resources","roster.csv"), type=str,
-                  help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
-                       "'login_id' (e.g. awp066) and 'id' (the Canvas user_id).")
-parser.add_option("-L", "--assignment_list",
-                  dest="assignment_list", default=os.path.join("resources","assignments.csv"), type=str,
-                  help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
-                       "'name' and 'id'.")
-parser.add_option("-t", "--token-json-file",
-                  dest="token_json_file", default=os.path.join("resources","token.json"), type=str,
-                  help="The path to a .json file containing the Canvas authorization token.")
+parser.add_option("-m",
+                  dest="make_assignment_directory", action="store_true", default=False,
+                  help="If the directory <assignment_name> doesn't exist, should it be created?")
 parser.add_option("-v", "--verbose",
-                  dest="verbose", default="False", type=str,
-                  help="If 'True', print verbose output.  Default is 'False'.")
+                  dest="verbose", action="store_true", default=False,
+                  help="Should additional output be printed?")
 
 
 def get_or_make_directory(parent_directory, subdirectory):
@@ -68,31 +60,26 @@ if __name__ == "__main__":
     download_filename = options.download_filename
 
     verbose = options.verbose
-    if verbose.lower() == "true":
-        verbose = True
-    elif verbose.lower() == "false":
-        verbose = False
-    else:
-        print("verbose must be 'True' or 'False': %s" % verbose)
-        sys.exit(1)
 
     course_id = options.course_id
     assert isinstance(course_id, int), "course_id is not an int: %s" % course_id
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
 
-    token_json_file = options.token_json_file
+    token_json_file = os.path.join(script_dir, "resources","token.json")
     assert os.path.isfile(token_json_file), "token_json_file is not a file: %s" % token_json_file
 
-    roster_file = options.roster
+    roster_file = os.path.join(script_dir, "resources", "roster.csv")
     assert os.path.isfile(roster_file), "roster_file is not a file: %s" % roster_file
 
     parent_directory = options.parent_directory
     if not os.path.isdir(parent_directory):
         parent_directory = make_new_directory("parent_directory", parent_directory)
 
-    assignment_list = options.assignment_list
+    assignment_list = os.path.join(script_dir, "resources", "assignments.csv")
     assert os.path.isfile(assignment_list), "assignment_list is not a file: %s" % assignment_list
+
+    make_assignment_directory = options.make_assignment_directory
 
     assignment_name = options.assignment_name
     assignment_id = options.assignment_id
@@ -137,16 +124,18 @@ if __name__ == "__main__":
                   "-i", str(assignment_id),
                   "-u", str(user_id),
                   "-n", netid,
-                  "-r", roster_file,
-                  "-L", assignment_list,
                   "-d", assignment_directory,
-                  "-t", token_json_file]
+                ]
+
+        if make_assignment_directory:
+            args.extend(["-m"])
 
         if download_filename is not None:
             args.extend(["-o", download_filename])
 
         args_as_string = " ".join(args)
-        #print("calling " + args_as_string)
+        if verbose:
+            print("calling " + args_as_string)
         p = subprocess.Popen(args)
         plist[netid] = p
 

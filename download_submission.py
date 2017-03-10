@@ -17,10 +17,12 @@ parser.add_option("-c", "--course-id",
                   help="The Canvas course_id.  e.g. 43589")
 parser.add_option("-a", "--assignment-name",
                   dest="assignment_name", default=None,
-                  help="The name of the assignment to download.  e.g. 'proj4'")
+                  help="The name of the assignment to download.  e.g. 'proj4'.  Not necessary if assignment-id is "
+                       "provided.")
 parser.add_option("-i", "--assignment-id",
                   dest="assignment_id", default=None, type=int,
-                  help="The Canvas assignment_id of the assignment to download.")
+                  help="The Canvas assignment_id of the assignment to download.  Not necessary if assignment-name is "
+                       "provided.")
 parser.add_option("-d", "--download-directory",
                   dest="download_directory", default=os.getcwd(),
                   help="The path to download the submission to.")
@@ -34,25 +36,10 @@ parser.add_option("-n", "--netid",
 parser.add_option("-u", "--user-id",
                   dest="user_id", default=None, type=int,
                   help="The Canvas user_id of the student whose assignment you wish to download.")
-parser.add_option("-r", "--roster",
-                  dest="roster",
-                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                       "resources",
-                                       "roster.csv"),
-                  type=str,
-                  help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
-                       "'login_id' (e.g. awp066) and 'id' (the Canvas user_id).")
-parser.add_option("-L", "--assignment_list",
-                  dest="assignment_list",
-                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                       "resources",
-                                       "assignments.csv"),
-                  type=str,
-                  help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
-                       "'assignment_name' and 'assignment_id'.")
-parser.add_option("-t", "--token-json-file",
-                  dest="token_json_file", default=os.path.join("resources","token.json"), type=str,
-                  help="The path to a .json file containing the Canvas authorization token.")
+parser.add_option("-m",
+                  dest="make_assignment_directory", action="store_true", default=False,
+                  help="If the directory <assignment_name> doesn't exist, should it be created?")
+
 
 
 def get_filename(assignment_name, netid):
@@ -69,15 +56,17 @@ if __name__ == "__main__":
     # Get command line options
     (options, args) = parser.parse_args()
 
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+
     # for token generation, see https://canvas.instructure.com/doc/api/file.oauth.html#manual-token-generation
-    token_json_file = options.token_json_file
+    token_json_file = roster_file = os.path.join(script_dir, "resources", "token.json")
     token = get_token(token_json_file)
 
     course_id = options.course_id    # e.g. course_id = "43589"
     assert isinstance(course_id, int)
 
-    roster_file = options.roster
-    assignment_list = options.assignment_list
+    roster_file = os.path.join(script_dir, "resources", "roster.csv")
+    assignment_list = os.path.join(script_dir, "resources", "assignments.csv")
 
     assignment_name = options.assignment_name
     assignment_id = options.assignment_id    # e.g. assignment_id = "280047"
@@ -88,6 +77,8 @@ if __name__ == "__main__":
     netid = options.netid
     user_id = options.user_id    # e.g. user_id = "44648"
     netid, user_id = get_netid_and_user_id(netid, user_id, roster_file)
+
+    make_assignment_directory = options.make_assignment_directory
 
     # download submission info
     url = build_canvas_url(["courses", course_id, "assignments", assignment_id, "submissions", user_id], params={})
@@ -135,6 +126,15 @@ if __name__ == "__main__":
     assignment_response = open_canvas_page_as_string(url, token)
     assignment_response = json.loads(assignment_response)
     assignment_summary_path = os.path.join(download_directory, "assignment.json")
+
+    if not os.path.isdir(download_directory) and make_assignment_directory:
+        msg = "Creating directory: %s" % download_directory
+        print(msg)
+        write_to_log(msg)
+        os.mkdir(download_directory, 0700)
+
+    assert os.path.isdir(download_directory), "download_directory is not a valid directory: %s" % download_directory
+
     with open(assignment_summary_path, "w") as f:
         json.dump(assignment_response, f)
 
