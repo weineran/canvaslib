@@ -12,6 +12,16 @@ from optparse import OptionParser
 log_filename = "canvaslib.log"
 
 
+def convert_Z_to_UTC(time_string):
+    assert isinstance(time_string, str), "time_string is not a string: %s" % time_string
+
+    if time_string.endswith("Z"):
+        time_string = time_string[:-1]
+        time_string += "UTC"
+
+    return time_string
+
+
 def get_optparse_args(parser):
     assert isinstance(parser, OptionParser), "parser is not an OptionParser: %s" % parser
 

@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     netids = os.listdir(submissions_directory)
 
-    count = 0
+    graded = []
     no_submission_count = 0
     other_list = []
     already_graded = 0
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         return_code = p.returncode
         
         if return_code == RETURNCODE_SUCCESS:
-            count += 1
+            graded.append(netid)
         elif return_code == RETURNCODE_NO_SUBMISSION:
             no_submission_count += 1
         elif return_code == RETURNCODE_OTHER:
@@ -129,7 +129,7 @@ if __name__ == "__main__":
 
     duration = time.time() - start
 
-    msg = "%d submissions graded" % count
+    msg = "%d submissions graded: %s..." % (len(graded), graded[:7])
     write_to_log(msg)
     print(msg)
 

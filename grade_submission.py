@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import os
-from utils import get_assignment_name_and_id, get_netid_and_user_id, write_to_log
+from utils import get_assignment_name_and_id, get_netid_and_user_id, write_to_log, convert_Z_to_UTC
 import shutil
 import subprocess
 import json
@@ -28,22 +28,6 @@ parser.add_option("-u", "--user-id",
 parser.add_option("-l", "--login-id",
                   dest="login_id", default=None, type=str,
                   help="The Canvas login_id (netid) of the student whose assignment you wish to grade.")
-parser.add_option("-r", "--roster",
-                  dest="roster",
-                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                       "resources",
-                                       "roster.csv"),
-                  type=str,
-                  help="The path to a .csv file containing a class roster.  At a minimum, should have columns labeled "
-                       "'login_id' (e.g. awp066) and 'id' (the Canvas user_id).")
-parser.add_option("-L", "--assignment_list",
-                  dest="assignment_list",
-                  default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                       "resources",
-                                       "assignments.csv"),
-                  type=str,
-                  help="The path to a .csv file containing a list of assignments.  At a minimum, should have columns labeled "
-                       "'assignment_name' and 'assignment_id'.")
 parser.add_option("-m",
                   dest="make_assignment_directory", action="store_true", default=False,
                   help="If the assignment directory doesn't exist, should it be created?")
@@ -133,7 +117,9 @@ def should_do_grading(submission_summary_file, results_file):
     if graded_version == "N/A":
         return True, None, None
 
+    submitted_at = convert_Z_to_UTC(str(submitted_at))
     submitted_at_time = datetime.datetime.strptime(submitted_at, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
+    graded_version = convert_Z_to_UTC(str(graded_version))
     graded_version_time = datetime.datetime.strptime(graded_version, "%Y-%m-%dT%H:%M:%S%Z").timetuple()
 
     if graded_version_time >= submitted_at_time:
@@ -168,17 +154,29 @@ if __name__ == "__main__":
         "login_id: [%s]\n" \
         "user_id: [%s]" % (login_id, user_id)
 
-    roster_file = options.roster
+    roster_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                       "resources",
+                                       "roster.csv")
     assert os.path.isfile(roster_file), "roster_file is not a valid file: %s" % roster_file
 
-    assignment_list = options.assignment_list
+    assignment_list = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                       "resources",
+                                       "assignments.csv")
     assert os.path.isfile(assignment_list), "assignment_list is not a valid file: %s" % assignment_list
 
     course_id = options.course_id  # this arg is optional
 
     assignment_name, assignment_id = get_assignment_name_and_id(assignment_name, assignment_id, assignment_list,
                                                                 course_id)
-    login_id, user_id = get_netid_and_user_id(login_id, user_id, roster_file)
+
+    try:
+        login_id, user_id = get_netid_and_user_id(login_id, user_id, roster_file)
+    except:
+        msg = "%s: unable to find student in roster.  netid [%s] user_id [%s].  Dropped class?.  Exiting." % \
+              (__file__, str(login_id), str(user_id))
+        print(msg)
+        write_to_log(msg)
+        sys.exit(RETURNCODE_OTHER)
 
     assignment_directory = os.path.join(submissions_directory, login_id, assignment_name)
 
